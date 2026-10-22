@@ -10,7 +10,7 @@ Ký hiệu: ✅ đã có · ❌ còn thiếu · ⚠️ cần người dùng thao
 |---|---|---|---|
 | Node.js | v18+ (PRD) | ✅ v24.21.0 | Đạt yêu cầu |
 | npm / npx | đi kèm Node | ✅ 11.19.0 | npm 11 chặn install script chưa duyệt; đã duyệt `prisma`, `@prisma/engines` |
-| Git | Version control (PRD) | ✅ 2.55.0 | Đã có repo, nhánh `main`, remote `origin` → GitHub, chưa có commit. Đã cấu hình `user.name` / `user.email` |
+| Git | Version control (PRD) | ✅ 2.55.0 | Đã có repo, nhánh `main`, remote `origin` → GitHub (đã push). Đã cấu hình `user.name` / `user.email` |
 | GitHub CLI (`gh`) | Repo + GitHub Actions | ✅ 2.102.0 | Đã đăng nhập (`aehuy12345`) |
 | Playwright Chromium | E2E test | ✅ | Đã cài qua `npx playwright install chromium` |
 | Google Chrome | Playwright MCP (mặc định dùng Chrome) | ✅ | |
@@ -71,7 +71,7 @@ Ghi chú Prisma: dùng generator `prisma-client-js` vì generator mặc định 
 
 ## 5. Việc còn lại (cần người dùng)
 
-1. Commit đầu tiên + push lên GitHub: repo local đã nối `origin` → `https://github.com/aehuy12345/Lib_start.git` (public, còn trống), nhánh chính đã đổi thành `main`, nhưng chưa có commit. Cần làm trước nhánh feature đầu tiên / CI.
+1. ~~Commit đầu tiên + push lên GitHub~~ — xong 2026-10-22, `main` đã push lên `https://github.com/aehuy12345/Lib_start` (public).
 2. Tạo Supabase project sau khi ERD được duyệt, rồi điền `server/.env`. ⚠️ `server/.env` hiện là template do `prisma init` sinh ra: chỉ có `DATABASE_URL` giá trị mẫu, **thiếu** `PORT`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — chép lại từ `server/.env.example`.
 3. Kết nối Vercel trước giai đoạn Deployment.
 

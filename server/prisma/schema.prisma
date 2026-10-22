@@ -1,0 +1,10 @@
+// Prisma schema — models will be added after the ERD (design/erd/erd.md) is approved.
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}

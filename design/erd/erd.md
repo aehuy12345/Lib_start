@@ -4,6 +4,8 @@ Giai đoạn Design, bước 2/3. ERD này suy ra từ `design/flows/` và các 
 
 Quy ước: `[Giả định]` là quyết định tạm của người thiết kế ERD; `[Cần làm rõ]` cần người dùng chốt.
 
+**Trạng thái: duyệt tạm ngày 2026-10-23, bao gồm mọi `[Giả định]`.** Lỗi phát hiện khi implement sẽ được sửa ở đây và ghi lại qua `/learn-by-mistake`.
+
 ## 1. Sơ đồ
 
 ```mermaid
@@ -29,6 +31,7 @@ erDiagram
         varchar name "50"
         varchar phone "nullable, 15"
         varchar address "nullable, 255"
+        varchar avatar_path "nullable, bucket avatars"
         user_role role "reader | librarian | admin"
         user_status status "pending | active | disabled"
         timestamptz email_verified_at "nullable"
@@ -61,6 +64,7 @@ erDiagram
         varchar isbn "nullable, 13, unique khi chưa xóa"
         varchar description "255"
         int category_id FK
+        varchar cover_path "nullable, bucket book-covers"
         int total_quantity "= available + borrowed + damaged"
         int available_quantity
         int borrowed_quantity
@@ -176,6 +180,7 @@ Kiểu khóa chính: `integer GENERATED ALWAYS AS IDENTITY`. `[Giả định]` D
 - `status` mặc định `pending`; `role` mặc định `reader`, server không nhận `role` từ client khi đăng ký.
 - Kích hoạt: qua link email (đặt `email_verified_at`, `status = active`) hoặc Admin bấm Kích hoạt ở 2.6.1.
 - "Số lần mượn" và "Tổng tiền phạt" ở 2.1.3 tính bằng truy vấn, không lưu cột.
+- `avatar_path`: đường dẫn trong bucket `avatars` (vd `<uuid>.webp`), null là chưa có ảnh (bổ sung 2026-10-22, xem mục 5 "Storage").
 - Ràng buộc "luôn còn ít nhất một Admin active" kiểm tra trong transaction ở backend (2.6.1, 2.6.2), không đặt ở DB.
 
 ### email_verification_tokens
@@ -197,6 +202,7 @@ Kiểu khóa chính: `integer GENERATED ALWAYS AS IDENTITY`. `[Giả định]` D
   - Sửa số lượng tổng (2.2.5): `available = total_mới - borrowed - damaged`, chặn nếu kết quả < 0.
 - `borrow_count` tăng 1 khi nhân viên xác nhận đơn mượn; dùng cho sắp xếp "phổ biến nhất" (2.2.3) và Top 5 (2.7.1) mà không phải đếm lại khi phân trang. `[Giả định]`
 - `version` tăng mỗi lần sửa, dùng cho khóa lạc quan (2.2.5 edge 5).
+- `cover_path`: đường dẫn trong bucket `book-covers`, null là chưa có ảnh (bổ sung 2026-10-22). Soft delete sách không xóa ảnh.
 - Soft delete bằng `deleted_at` (README điểm 2). Danh sách và chi tiết công khai lọc `deleted_at IS NULL`.
 
 ### borrow_orders
@@ -259,7 +265,7 @@ Kiểu khóa chính: `integer GENERATED ALWAYS AS IDENTITY`. `[Giả định]` D
 | 7 | Ảnh biên lai tùy chọn | `fine_tickets.receipt_path` |
 | 8 | Chặn mượn khi có sách quá hạn | Kiểm tra ở backend, dùng index `(status, due_date)` |
 | 9 | Mất cũng có thể kèm phí muộn, mức cố định | `UNIQUE (return_request_id, type)` cho phép 2 phiếu với mọi tình trạng |
-| 10 | Trả tại quầy | Chưa chốt, xem mục 6 |
+| 10 | Có làm trả tại quầy | Nhân viên tạo `return_requests` (`requested_by` = nhân viên) và xác nhận trong cùng transaction |
 
 ## 5. Ghi chú triển khai
 
@@ -268,8 +274,9 @@ Kiểu khóa chính: `integer GENERATED ALWAYS AS IDENTITY`. `[Giả định]` D
 - Không dùng Supabase Auth; xác thực bằng JWT tự quản như PRD.
 - Tìm kiếm không dấu (2.2.3 edge 3): bật extension `unaccent` và tạo index biểu thức trên `title`, `author` nếu cần hiệu năng.
 - `updated_at` cập nhật bằng Prisma `@updatedAt` hoặc trigger.
+- **Storage** (bổ sung 2026-10-22, quy tắc ở `design/flows/README.md` mục "Upload file"): 3 bucket `avatars` (public), `book-covers` (public), `receipts` (private); giới hạn 2 MB và `image/jpeg`, `image/png`, `image/webp` đặt cả ở cấu hình bucket lẫn ở server. Các cột `*_path` lưu đường dẫn trong bucket, API ghép thành URL công khai (hoặc signed URL cho `receipts`) khi trả về. Tạo bucket cùng lúc migrate schema.
 
-## 6. Điểm cần làm rõ
+## 6. Điểm đã chốt (2026-10-23)
 
-- `[Cần làm rõ]` README điểm 10: nhân viên xác nhận trả tại quầy khi độc giả chưa tạo yêu cầu. ERD đã hỗ trợ được mà không đổi cấu trúc: nhân viên tạo `return_requests` với `requested_by` là chính họ và xác nhận ngay trong cùng transaction. Cần chốt có làm tính năng này không.
-- `[Cần làm rõ]` Sách hư hỏng có quy trình sửa xong đưa lại kho (`damaged` → `available`) không. ERD đã có `damaged_quantity` nên chỉ cần thêm thao tác ở backend nếu muốn.
+- README điểm 10: **có** làm trả tại quầy. Nhân viên tạo `return_requests` với `requested_by` là chính họ và xác nhận ngay trong cùng transaction; không đổi cấu trúc.
+- Sách hư hỏng **không** quay lại kho: `damaged_quantity` chỉ tăng, không có thao tác `damaged` → `available`.

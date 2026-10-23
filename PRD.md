@@ -56,17 +56,20 @@ Phần mềm quản lý thư viện web-based cho phép:
 **Yêu cầu:** Login vào hệ thống với vai trò độc giả
 
 **Thông tin hiển thị:**
+- Ảnh đại diện (nếu chưa có thì hiển thị ảnh mặc định)
 - Tên, Email, Số điện thoại, Địa chỉ
 - Ngày tham gia, Số lần mượn, Tổng số tiền phạt
 
 **Chức năng:**
 - Cập nhật thông tin cá nhân
+- Tải lên, thay đổi hoặc xóa ảnh đại diện
 - Thay đổi mật khẩu
 
 **Validation Rules:**
 - Tên: Không được để trống, tối đa 50 ký tự
 - Số điện thoại: Định dạng số điện thoại hợp lệ
 - Địa chỉ: Không được để trống, tối đa 255 ký tự
+- Ảnh đại diện: Không bắt buộc; định dạng JPG, PNG hoặc WebP; dung lượng tối đa 2 MB
 
 ---
 
@@ -90,8 +93,8 @@ Phần mềm quản lý thư viện web-based cho phép:
 
 **Flow:**
 1. Nhân viên click "Thêm Sách Mới"
-2. Nhập: Tên sách, Tác giả, Năm xuất bản, ISBN, Thể loại, Mô tả, Số lượng bản sách
-3. Hệ thống lưu sách vào database với trạng thái "Có sẵn"
+2. Nhập: Tên sách, Tác giả, Năm xuất bản, ISBN, Thể loại, Mô tả, Số lượng bản sách, Ảnh bìa
+3. Hệ thống lưu sách vào database với trạng thái "Có sẵn"; ảnh bìa lưu trên Supabase Storage
 4. Hiện thông báo "Thêm sách thành công"
 
 **Validation Rules:**
@@ -102,13 +105,14 @@ Phần mềm quản lý thư viện web-based cho phép:
 - Thể loại: Phải có thể loại sách
 - Mô tả: Không được để trống, tối đa 255 ký tự
 - Tác giả: Không được để trống, tối đa 100 ký tự
+- Ảnh bìa: Không bắt buộc; định dạng JPG, PNG hoặc WebP; dung lượng tối đa 2 MB
 
 
 
 #### 2.2.3 Xem Danh Sách Sách
 **Actor:** Tất cả người dùng (không cần login)
 **Hiển thị thông tin:**
-- Tên sách, Tác giả, Năm xuất bản, Thể loại, Số lượng có sẵn, Số lượng đang mượn
+- Ảnh bìa (nếu chưa có thì hiển thị ảnh mặc định), Tên sách, Tác giả, Năm xuất bản, Thể loại, Số lượng có sẵn, Số lượng đang mượn
 
 **Chức năng tìm kiếm & lọc:**
 - Tìm kiếm theo tên sách hoặc tác giả
@@ -119,7 +123,7 @@ Phần mềm quản lý thư viện web-based cho phép:
 #### 2.2.4 Xem Chi Tiết Sách
 **Actor:** Tất cả người dùng (không cần login)
 **Hiển thị:**
-- Tên, Tác giả, ISBN, Năm xuất bản, Mô tả chi tiết
+- Ảnh bìa, Tên, Tác giả, ISBN, Năm xuất bản, Mô tả chi tiết
 - Số lượng bản đang có, đang mượn
 - Lịch sử mượn (Độc giả, Ngày mượn, Ngày hết hạn: Nếu là nhân viên thư viện thì hiển thị)
 
@@ -131,7 +135,7 @@ Phần mềm quản lý thư viện web-based cho phép:
 
 **Flow sửa:**
 - Xem chi tiết sách
-- Click "Sửa" → Chỉnh sửa thông tin → Lưu
+- Click "Sửa" → Chỉnh sửa thông tin (bao gồm thay hoặc xóa ảnh bìa) → Lưu
 **Flow xóa:**
 - Xem chi tiết sách
 - Click "Xóa" → Xác nhận → Xóa (nếu không có đơn mượn hoạt động)

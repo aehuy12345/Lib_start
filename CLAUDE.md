@@ -4,10 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Pre-implementation, tooling scaffolded. `PRD.md` (Vietnamese-language spec for a library borrow/return management system) is the source of truth for requirements; read it before designing any feature. `tech.md` tracks which tools, MCP servers, accounts and libraries are installed or still missing — update it when that changes.
+Implementation phase, starting with 2.1.1 on branch `feature/2.1.1-dang-ky`. `PRD.md` (Vietnamese-language spec for a library borrow/return management system) is the source of truth for requirements; read it before designing any feature. `tech.md` tracks which tools, MCP servers, accounts and libraries are installed or still missing — update it when that changes.
 
-- `client/` — Vite + React (JS), Tailwind v4 via `@tailwindcss/vite`, Vitest + Testing Library, Playwright (`e2e/`). No app code yet beyond the Vite template.
-- `server/` — Express 5 (CommonJS JS), Prisma 7.10.1 pinned (npm `latest` is an 8.x RC) with `prisma-client-js` generator + `@prisma/adapter-pg` (Prisma 7 requires a driver adapter: `new PrismaClient({ adapter: new PrismaPg({ connectionString }) })`), `bcryptjs` instead of native `bcrypt`. Only `/api/health` exists. `prisma/schema.prisma` has no models until the ERD is approved. Env template: `server/.env.example`.
+- `client/` — Vite + React (JS), Tailwind v4 via `@tailwindcss/vite`, Vitest + Testing Library, Playwright (`e2e/`). Pages in `src/pages/`, API calls per feature in `src/features/<area>/`, axios instance in `src/api/client.js` (`VITE_API_URL`).
+- `server/` — Express 5 (CommonJS JS), Prisma 7.10.1 pinned (npm `latest` is an 8.x RC) with `prisma-client-js` generator + `@prisma/adapter-pg` (Prisma 7 requires a driver adapter: `new PrismaClient({ adapter: new PrismaPg({ connectionString }) })`), `bcryptjs` instead of native `bcrypt`. `createApp(deps)` in `src/app.js` takes injectable services/prisma/mailer so tests run without a DB; feature code lives in `src/modules/<area>/` (`*.validation.js` Joi, `*.service.js` factory, `*.routes.js`). The DB schema source of truth is the SQL in `server/supabase/migrations/` (applied via Supabase MCP); `prisma/schema.prisma` is hand-mapped to it — never run `prisma migrate` against Supabase. Mail is a console stub (`src/lib/mailer.js`) until a provider is chosen. Env template: `server/.env.example`.
 
 ## Commands
 
@@ -20,7 +20,7 @@ npm run test:e2e     # Playwright, starts dev server automatically
 # server/
 npm run dev          # nodemon src/index.js (PORT default 5000)
 npm test             # Vitest + Supertest (single file: npx vitest run tests/x.test.js)
-npx prisma validate | npx prisma generate | npm run prisma:migrate
+npx prisma validate | npx prisma generate
 ```
 
 ## Development methodology: Waterfall
@@ -28,10 +28,10 @@ npx prisma validate | npx prisma generate | npm run prisma:migrate
 Phases run in order; do not start a phase before the previous one is signed off by the user.
 
 1. **Requirement** — DONE (`PRD.md`).
-2. **Design** — IN PROGRESS, in this order:
-   1. **DONE, approved 2026-10-21.** Business flows in Mermaid, one file per PRD feature, saved to `design/flows/<feature-code>-<slug>.md` (e.g. `2.4.2-xac-nhan-tra-sach.md`). Each file covers happy case and edge cases; `design/flows/README.md` is the index. The user accepted every `[Giả định]` and proposal in the flow files; treat them as decided requirements.
-   2. **IN REVIEW (drafted 2026-10-21).** ERD (Mermaid) in `design/erd/erd.md`, derived from the flows and the decisions in `design/flows/README.md`. Waiting for user approval; its `[Giả định]` and open questions are not decided yet.
-   3. Migrate the schema to Supabase through the Supabase MCP (`apply_migration`), after the ERD is approved. Needs a Supabase project first.
+2. **Design** — DONE 2026-10-23, in this order:
+   1. **DONE, approved 2026-10-21.** Business flows in Mermaid, one file per PRD feature, saved to `design/flows/<feature-code>-<slug>.md` (e.g. `2.4.2-xac-nhan-tra-sach.md`). Each file covers happy case and edge cases; `design/flows/README.md` is the index. The user accepted every `[Giả định]` and proposal in the flow files; treat them as decided requirements. The 2026-10-22 file-upload addition (avatar in 2.1.3, book cover in 2.2.2–2.2.5, rules in README "Upload file") was approved 2026-10-23.
+   2. **DONE, provisionally approved 2026-10-23** (all `[Giả định]` included). ERD (Mermaid) in `design/erd/erd.md`. Decided: counter return at the desk is in scope; damaged books never go back to stock. Fix ERD errors found during implementation and record them via `/learn-by-mistake`.
+   3. **DONE 2026-10-23.** Schema migrated to Supabase project `lib-start` (ref `rvwvklbsqipakqtzyrch`, ap-southeast-1) via `apply_migration`; SQL kept in `server/supabase/migrations/`. Includes RLS on all tables (no policies, intentional) and the 3 storage buckets.
 3. Implementation → Testing → Deployment: follow PRD Part 3 phase order, using the per-feature workflow below.
 
 ## Implementation workflow (per feature)
@@ -53,7 +53,7 @@ Conventions for design docs: write in Vietnamese like the PRD, reference feature
 
 ## Supabase MCP
 
-`.mcp.json` registers the Supabase MCP server (HTTP, `mcp.supabase.com`). As of the last check the connected account had no Supabase projects, so one must be created before any schema work. Inspect existing tables before applying migrations.
+`.mcp.json` registers the Supabase MCP server (HTTP, `mcp.supabase.com`), scoped to project `lib-start` via `project_ref=rvwvklbsqipakqtzyrch`, with the `storage` feature enabled. Account-level tools (list/create projects) are not available in this scope. Inspect existing tables before applying migrations.
 
 ## Domain model (spans multiple PRD sections)
 

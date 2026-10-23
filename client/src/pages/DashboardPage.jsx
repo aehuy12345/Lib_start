@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useAuth } from '../features/auth/AuthContext'
 
 const TITLES = {
@@ -15,6 +16,9 @@ export default function DashboardPage() {
       <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-3">
         <h1 className="text-lg font-semibold text-slate-900">{TITLES[user.role]}</h1>
         <div className="flex items-center gap-4 text-sm">
+          {user.role === 'reader' && (
+            <Link to="/reader/profile" className="font-medium text-blue-600 hover:underline">Hồ sơ</Link>
+          )}
           <span className="text-slate-700">{user.name}</span>
           <button type="button" onClick={logout} className="font-medium text-blue-600 hover:underline">
             Đăng xuất

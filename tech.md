@@ -31,7 +31,7 @@ Ký hiệu: ✅ đã có · ❌ còn thiếu · ⚠️ cần người dùng thao
 
 | Dịch vụ | Dùng cho | Trạng thái |
 |---|---|---|
-| Supabase project | PostgreSQL + file storage | ✅ `lib-start` tạo 2026-10-23, đã migrate schema + 3 bucket. `DATABASE_URL` đã điền, dùng **Session pooler** (`aws-0-ap-southeast-1.pooler.supabase.com:5432`, user `postgres.rvwvklbsqipakqtzyrch`) vì host Direct chỉ có IPv6, máy dev không kết nối được. ⚠️ Còn thiếu `JWT_SECRET`/`JWT_EXPIRES_IN` (cần từ 2.1.2) và `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` (cần khi làm upload file) |
+| Supabase project | PostgreSQL + file storage | ✅ `lib-start` tạo 2026-10-23, đã migrate schema + 3 bucket. `DATABASE_URL` đã điền, dùng **Session pooler** (`aws-0-ap-southeast-1.pooler.supabase.com:5432`, user `postgres.rvwvklbsqipakqtzyrch`) vì host Direct chỉ có IPv6, máy dev không kết nối được. `JWT_SECRET` (chuỗi ngẫu nhiên 96 hex) + `JWT_EXPIRES_IN=24h` đã điền 2026-10-23 cho 2.1.2. Tài khoản test cho Postman/E2E tạo bằng `node scripts/seed-test-users.js` (5 tài khoản `test.<reader|librarian|admin|pending|disabled>@example.com`, mật khẩu `Test@1234`). ⚠️ Còn thiếu `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` (cần khi làm upload file) |
 | GitHub repo | Lưu code + CI/CD | ✅ `https://github.com/aehuy12345/Lib_start` |
 | Vercel | Hosting | ❌ Chưa kết nối (cần trước giai đoạn Deployment) |
 | Postman | Tài khoản cho Postman MCP | ✅ Đã đăng nhập |

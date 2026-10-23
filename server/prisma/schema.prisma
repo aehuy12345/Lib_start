@@ -1,4 +1,6 @@
-// Prisma schema — models will be added after the ERD (design/erd/erd.md) is approved.
+// Prisma schema khớp với server/supabase/migrations (nguồn sự thật là SQL migration).
+// Partial unique index, unique theo lower(name), CHECK và trigger updated_at chỉ có trong DB.
+// Không chạy `prisma migrate` trên DB này; đổi schema bằng migration SQL qua Supabase MCP.
 // Docs: https://pris.ly/d/prisma-schema
 
 generator client {
@@ -7,4 +9,273 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+enum UserRole {
+  reader
+  librarian
+  admin
+
+  @@map("user_role")
+}
+
+enum UserStatus {
+  pending
+  active
+  disabled
+
+  @@map("user_status")
+}
+
+enum BorrowStatus {
+  pending
+  borrowing
+  returned
+  rejected
+  cancelled
+
+  @@map("borrow_status")
+}
+
+enum ReturnStatus {
+  pending
+  confirmed
+  rejected
+  cancelled
+
+  @@map("return_status")
+}
+
+enum BookCondition {
+  normal
+  damaged
+  lost
+
+  @@map("book_condition")
+}
+
+enum FineType {
+  late
+  damaged
+  lost
+
+  @@map("fine_type")
+}
+
+enum FineStatus {
+  unpaid
+  pending
+  paid
+  rejected
+
+  @@map("fine_status")
+}
+
+model User {
+  id              Int        @id @default(autoincrement())
+  email           String     @unique @db.VarChar(255)
+  passwordHash    String     @map("password_hash") @db.VarChar(255)
+  name            String     @db.VarChar(50)
+  phone           String?    @db.VarChar(15)
+  address         String?    @db.VarChar(255)
+  avatarPath      String?    @map("avatar_path") @db.VarChar(255)
+  role            UserRole   @default(reader)
+  status          UserStatus @default(pending)
+  emailVerifiedAt DateTime?  @map("email_verified_at") @db.Timestamptz
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime   @default(now()) @map("updated_at") @db.Timestamptz
+
+  emailVerificationTokens EmailVerificationToken[]
+  borrowOrders            BorrowOrder[]            @relation("BorrowOrderReader")
+  processedBorrowOrders   BorrowOrder[]            @relation("BorrowOrderProcessor")
+  requestedReturns        ReturnRequest[]          @relation("ReturnRequestRequester")
+  processedReturns        ReturnRequest[]          @relation("ReturnRequestProcessor")
+  fineTickets             FineTicket[]             @relation("FineTicketReader")
+  issuedFineTickets       FineTicket[]             @relation("FineTicketIssuer")
+  confirmedFineTickets    FineTicket[]             @relation("FineTicketConfirmer")
+  auditLogs               AuditLog[]
+
+  @@map("users")
+}
+
+model EmailVerificationToken {
+  id        Int       @id @default(autoincrement())
+  userId    Int       @map("user_id")
+  tokenHash String    @unique @map("token_hash") @db.VarChar(255)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz
+  usedAt    DateTime? @map("used_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("email_verification_tokens")
+}
+
+model Category {
+  id        Int       @id @default(autoincrement())
+  name      String    @db.VarChar(50)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @default(now()) @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+
+  books Book[]
+
+  @@map("categories")
+}
+
+model Book {
+  id                Int       @id @default(autoincrement())
+  title             String    @db.VarChar(100)
+  author            String    @db.VarChar(100)
+  publishYear       Int       @map("publish_year") @db.SmallInt
+  isbn              String?   @db.VarChar(13)
+  description       String    @db.VarChar(255)
+  categoryId        Int       @map("category_id")
+  coverPath         String?   @map("cover_path") @db.VarChar(255)
+  totalQuantity     Int       @map("total_quantity")
+  availableQuantity Int       @map("available_quantity")
+  borrowedQuantity  Int       @default(0) @map("borrowed_quantity")
+  damagedQuantity   Int       @default(0) @map("damaged_quantity")
+  borrowCount       Int       @default(0) @map("borrow_count")
+  version           Int       @default(1)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime  @default(now()) @map("updated_at") @db.Timestamptz
+  deletedAt         DateTime? @map("deleted_at") @db.Timestamptz
+
+  category     Category      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  borrowOrders BorrowOrder[]
+
+  @@index([categoryId])
+  @@map("books")
+}
+
+model BorrowOrder {
+  id             Int          @id @default(autoincrement())
+  readerId       Int          @map("reader_id")
+  bookId         Int          @map("book_id")
+  status         BorrowStatus @default(pending)
+  requestedDays  Int          @default(14) @map("requested_days") @db.SmallInt
+  processedById  Int?         @map("processed_by")
+  processedAt    DateTime?    @map("processed_at") @db.Timestamptz
+  rejectReason   String?      @map("reject_reason") @db.VarChar(500)
+  borrowedAt     DateTime?    @map("borrowed_at") @db.Timestamptz
+  dueDate        DateTime?    @map("due_date") @db.Date
+  extensionCount Int          @default(0) @map("extension_count") @db.SmallInt
+  extendedAt     DateTime?    @map("extended_at") @db.Timestamptz
+  returnedAt     DateTime?    @map("returned_at") @db.Timestamptz
+  cancelledAt    DateTime?    @map("cancelled_at") @db.Timestamptz
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime     @default(now()) @map("updated_at") @db.Timestamptz
+
+  reader         User            @relation("BorrowOrderReader", fields: [readerId], references: [id], onDelete: Restrict)
+  book           Book            @relation(fields: [bookId], references: [id], onDelete: Restrict)
+  processedBy    User?           @relation("BorrowOrderProcessor", fields: [processedById], references: [id], onDelete: Restrict)
+  returnRequests ReturnRequest[]
+  fineTickets    FineTicket[]
+
+  @@index([status, createdAt])
+  @@index([readerId, status])
+  @@index([bookId, status])
+  @@index([status, dueDate])
+  @@index([processedById])
+  @@map("borrow_orders")
+}
+
+model ReturnRequest {
+  id            Int            @id @default(autoincrement())
+  borrowOrderId Int            @map("borrow_order_id")
+  status        ReturnStatus   @default(pending)
+  requestedById Int            @map("requested_by")
+  processedById Int?           @map("processed_by")
+  processedAt   DateTime?      @map("processed_at") @db.Timestamptz
+  condition     BookCondition?
+  conditionNote String?        @map("condition_note") @db.VarChar(500)
+  lateDays      Int?           @map("late_days") @db.SmallInt
+  rejectReason  String?        @map("reject_reason") @db.VarChar(500)
+  cancelledAt   DateTime?      @map("cancelled_at") @db.Timestamptz
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime       @default(now()) @map("updated_at") @db.Timestamptz
+
+  borrowOrder BorrowOrder  @relation(fields: [borrowOrderId], references: [id], onDelete: Restrict)
+  requestedBy User         @relation("ReturnRequestRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+  processedBy User?        @relation("ReturnRequestProcessor", fields: [processedById], references: [id], onDelete: Restrict)
+  fineTickets FineTicket[]
+
+  @@index([status, createdAt])
+  @@index([requestedById])
+  @@index([processedById])
+  @@map("return_requests")
+}
+
+model FineTier {
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(25)
+  type      FineType
+  amount    Int
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  fineTickets FineTicket[]
+
+  @@index([type, isActive])
+  @@map("fine_tiers")
+}
+
+model FineTicket {
+  id              Int        @id @default(autoincrement())
+  readerId        Int        @map("reader_id")
+  borrowOrderId   Int        @map("borrow_order_id")
+  returnRequestId Int        @map("return_request_id")
+  fineTierId      Int        @map("fine_tier_id")
+  type            FineType
+  tierName        String     @map("tier_name") @db.VarChar(25)
+  amount          Int
+  note            String?    @db.VarChar(500)
+  status          FineStatus @default(unpaid)
+  issuedAt        DateTime   @default(now()) @map("issued_at") @db.Timestamptz
+  issuedById      Int        @map("issued_by")
+  submittedAt     DateTime?  @map("submitted_at") @db.Timestamptz
+  receiptPath     String?    @map("receipt_path") @db.VarChar(255)
+  confirmedById   Int?       @map("confirmed_by")
+  confirmedAt     DateTime?  @map("confirmed_at") @db.Timestamptz
+  rejectReason    String?    @map("reject_reason") @db.VarChar(500)
+  rejectedAt      DateTime?  @map("rejected_at") @db.Timestamptz
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime   @default(now()) @map("updated_at") @db.Timestamptz
+
+  reader        User          @relation("FineTicketReader", fields: [readerId], references: [id], onDelete: Restrict)
+  borrowOrder   BorrowOrder   @relation(fields: [borrowOrderId], references: [id], onDelete: Restrict)
+  returnRequest ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Restrict)
+  fineTier      FineTier      @relation(fields: [fineTierId], references: [id], onDelete: Restrict)
+  issuedBy      User          @relation("FineTicketIssuer", fields: [issuedById], references: [id], onDelete: Restrict)
+  confirmedBy   User?         @relation("FineTicketConfirmer", fields: [confirmedById], references: [id], onDelete: Restrict)
+
+  @@unique([returnRequestId, type], map: "fine_tickets_return_request_type_key")
+  @@index([readerId, status])
+  @@index([status, submittedAt])
+  @@index([issuedAt])
+  @@index([borrowOrderId])
+  @@index([fineTierId])
+  @@index([issuedById])
+  @@index([confirmedById])
+  @@map("fine_tickets")
+}
+
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  actorId    Int      @map("actor_id")
+  action     String   @db.VarChar(50)
+  entityType String   @map("entity_type") @db.VarChar(50)
+  entityId   Int      @map("entity_id")
+  oldValue   Json?    @map("old_value")
+  newValue   Json?    @map("new_value")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([entityType, entityId])
+  @@index([actorId, createdAt])
+  @@map("audit_logs")
 }

@@ -10,6 +10,8 @@ const { createAuthRouter } = require('./modules/auth/auth.routes');
 const { createSupabaseStorage } = require('./lib/storage');
 const { createProfileService } = require('./modules/profile/profile.service');
 const { createProfileRouter } = require('./modules/profile/profile.routes');
+const { createCategoryService } = require('./modules/category/category.service');
+const { createCategoryRouter } = require('./modules/category/category.routes');
 
 // deps cho phép test thay prisma/mailer/tokens/storage bằng bản giả.
 function createApp(deps = {}) {
@@ -30,6 +32,7 @@ function createApp(deps = {}) {
       tokens,
     }),
     profile: deps.profileService ?? createProfileService({ prisma, storage }),
+    category: deps.categoryService ?? createCategoryService({ prisma }),
   };
   const requireAuth = createRequireAuth({ tokens, authService: services.auth });
 
@@ -44,6 +47,7 @@ function createApp(deps = {}) {
 
   app.use('/api/auth', createAuthRouter(services.auth, requireAuth));
   app.use('/api/profile', createProfileRouter(services.profile, requireAuth));
+  app.use('/api/categories', createCategoryRouter(services.category, requireAuth));
 
   app.use((req, res) => {
     res.status(404).json({ message: 'Không tìm thấy' });

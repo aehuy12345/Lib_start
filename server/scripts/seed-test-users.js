@@ -30,7 +30,30 @@ async function main() {
     console.log(`${data.role.padEnd(9)} ${data.status.padEnd(8)} ${email}`);
   }
   console.log(`Mật khẩu chung: ${PASSWORD}`);
+
+  await seedCategories(prisma);
   await prisma.$disconnect();
+}
+
+// 2.2.1: thể loại cố định có 1 sách (test chặn xóa) và dọn các thể loại "Test ..." do API/E2E test tạo ra.
+const CATEGORY_WITH_BOOK = 'Test Có Sách';
+
+async function seedCategories(prisma) {
+  const removed = await prisma.category.deleteMany({
+    where: { name: { startsWith: 'Test ' }, NOT: { name: CATEGORY_WITH_BOOK }, books: { none: {} } },
+  });
+  let category = await prisma.category.findFirst({ where: { name: CATEGORY_WITH_BOOK, deletedAt: null } });
+  if (!category) category = await prisma.category.create({ data: { name: CATEGORY_WITH_BOOK } });
+  const book = await prisma.book.findFirst({ where: { categoryId: category.id, deletedAt: null } });
+  if (!book) {
+    await prisma.book.create({
+      data: {
+        title: 'Sách Test Thể Loại', author: 'Test', publishYear: 2020, description: 'Dữ liệu test 2.2.1',
+        categoryId: category.id, totalQuantity: 1, availableQuantity: 1,
+      },
+    });
+  }
+  console.log(`category  "${CATEGORY_WITH_BOOK}" (id ${category.id}) có sách; đã dọn ${removed.count} thể loại test`);
 }
 
 main().catch((err) => {

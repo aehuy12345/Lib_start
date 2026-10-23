@@ -35,6 +35,12 @@ const registerSchema = Joi.object({
     }),
 });
 
+// 2.1.2: cùng quy tắc email/mật khẩu với đăng ký.
+const loginSchema = Joi.object({
+  email: registerSchema.extract('email'),
+  password: registerSchema.extract('password'),
+});
+
 const verifyEmailSchema = Joi.object({
   token: Joi.string().trim().hex().length(64).required()
     .messages({
@@ -46,4 +52,4 @@ const verifyEmailSchema = Joi.object({
     }),
 });
 
-module.exports = { registerSchema, verifyEmailSchema };
+module.exports = { registerSchema, loginSchema, verifyEmailSchema };

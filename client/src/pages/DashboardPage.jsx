@@ -1,0 +1,27 @@
+import { useAuth } from '../features/auth/AuthContext'
+
+const TITLES = {
+  reader: 'Dashboard độc giả',
+  librarian: 'Dashboard nhân viên thư viện',
+  admin: 'Dashboard quản lý',
+}
+
+// Khung dashboard theo vai trò; nội dung thật thêm ở các tính năng sau (vd 2.7.1).
+export default function DashboardPage() {
+  const { user, logout } = useAuth()
+
+  return (
+    <main className="min-h-screen bg-slate-50">
+      <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-3">
+        <h1 className="text-lg font-semibold text-slate-900">{TITLES[user.role]}</h1>
+        <div className="flex items-center gap-4 text-sm">
+          <span className="text-slate-700">{user.name}</span>
+          <button type="button" onClick={logout} className="font-medium text-blue-600 hover:underline">
+            Đăng xuất
+          </button>
+        </div>
+      </header>
+      <section className="p-6 text-sm text-slate-600">Xin chào, {user.name}.</section>
+    </main>
+  )
+}

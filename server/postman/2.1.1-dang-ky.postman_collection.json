@@ -1,0 +1,243 @@
+{
+  "info": {
+    "_postman_id": "60d2b1fd-28da-4287-a554-3340ad3ddab0",
+    "name": "Lib_start - 2.1.1 Đăng ký",
+    "description": "API test cho tính năng 2.1.1 Đăng ký (design/flows/2.1.1-dang-ky.md). Chạy theo thứ tự; email được sinh mới mỗi lần chạy. Đăng ký là endpoint công khai nên phần 'quyền' kiểm tra client không tự gán được role.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [{ "key": "baseUrl", "value": "http://localhost:5000/api" }],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.collectionVariables.get('email')) {",
+          "  const id = Date.now();",
+          "  pm.collectionVariables.set('email', `pm+${id}@example.com`);",
+          "  pm.collectionVariables.set('emailUpper', `PM+${id}@EXAMPLE.COM`);",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Happy case",
+      "item": [
+        {
+          "name": "Đăng ký thành công → reader, pending",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('201 Created', () => pm.response.to.have.status(201));",
+            "const b = pm.response.json();",
+            "pm.test('role reader, status pending', () => { pm.expect(b.user.role).to.eql('reader'); pm.expect(b.user.status).to.eql('pending'); });",
+            "pm.test('email lowercase, tên đã trim, không lộ passwordHash', () => { pm.expect(b.user.email).to.eql(pm.collectionVariables.get('email')); pm.expect(b.user.name).to.eql('Nguyễn Văn A'); pm.expect(b.user).to.not.have.property('passwordHash'); });",
+            "pm.test('thông báo chờ xác nhận', () => pm.expect(b.message).to.include('chờ xác nhận'));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/register",
+            "body": { "mode": "raw", "raw": "{\"email\":\"  {{emailUpper}} \",\"name\":\"  Nguyễn Văn A  \",\"password\":\"secret123\",\"confirmPassword\":\"secret123\"}", "options": { "raw": { "language": "json" } } }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Business rules",
+      "item": [
+        {
+          "name": "Email trùng (khác hoa thường) → 409",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+            "pm.test('lỗi tại field email', () => pm.expect(pm.response.json().errors.email).to.eql('Email đã được sử dụng'));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/register",
+            "body": { "mode": "raw", "raw": "{\"email\":\"{{emailUpper}}\",\"name\":\"Trùng\",\"password\":\"secret123\",\"confirmPassword\":\"secret123\"}", "options": { "raw": { "language": "json" } } }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Validation",
+      "item": [
+        {
+          "name": "Body rỗng → lỗi đủ 4 field",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400', () => pm.response.to.have.status(400));",
+            "const e = pm.response.json().errors;",
+            "pm.test('đủ 4 field', () => pm.expect(e).to.have.all.keys('email','name','password','confirmPassword'));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/register",
+            "body": { "mode": "raw", "raw": "{}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "Email sai định dạng",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400', () => pm.response.to.have.status(400));",
+            "pm.test('message', () => pm.expect(pm.response.json().errors.email).to.eql('Email không đúng định dạng'));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/register",
+            "body": { "mode": "raw", "raw": "{\"email\":\"abc\",\"name\":\"A\",\"password\":\"secret123\",\"confirmPassword\":\"secret123\"}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "Tên chỉ có khoảng trắng",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400', () => pm.response.to.have.status(400));",
+            "pm.test('message', () => pm.expect(pm.response.json().errors.name).to.eql('Tên không được để trống'));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/register",
+            "body": { "mode": "raw", "raw": "{\"email\":\"ws@example.com\",\"name\":\"    \",\"password\":\"secret123\",\"confirmPassword\":\"secret123\"}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "Tên 51 ký tự",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400', () => pm.response.to.have.status(400));",
+            "pm.test('message', () => pm.expect(pm.response.json().errors.name).to.eql('Tên tối đa 50 ký tự'));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/register",
+            "body": { "mode": "raw", "raw": "{\"email\":\"long@example.com\",\"name\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"password\":\"secret123\",\"confirmPassword\":\"secret123\"}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "Mật khẩu 7 ký tự",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400', () => pm.response.to.have.status(400));",
+            "pm.test('message', () => pm.expect(pm.response.json().errors.password).to.eql('Mật khẩu tối thiểu 8 ký tự'));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/register",
+            "body": { "mode": "raw", "raw": "{\"email\":\"p7@example.com\",\"name\":\"A\",\"password\":\"1234567\",\"confirmPassword\":\"1234567\"}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "Mật khẩu 17 ký tự",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400', () => pm.response.to.have.status(400));",
+            "pm.test('message', () => pm.expect(pm.response.json().errors.password).to.eql('Mật khẩu tối đa 16 ký tự'));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/register",
+            "body": { "mode": "raw", "raw": "{\"email\":\"p17@example.com\",\"name\":\"A\",\"password\":\"12345678901234567\",\"confirmPassword\":\"12345678901234567\"}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "Confirm không khớp",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400', () => pm.response.to.have.status(400));",
+            "pm.test('message', () => pm.expect(pm.response.json().errors.confirmPassword).to.eql('Xác nhận mật khẩu không khớp'));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/register",
+            "body": { "mode": "raw", "raw": "{\"email\":\"cf@example.com\",\"name\":\"A\",\"password\":\"secret123\",\"confirmPassword\":\"secret124\"}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "JSON hỏng → 400",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400', () => pm.response.to.have.status(400));",
+            "pm.test('message', () => pm.expect(pm.response.json().message).to.eql('Body JSON không hợp lệ'));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/register",
+            "body": { "mode": "raw", "raw": "{\"email\": ", "options": { "raw": { "language": "json" } } }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Quyền (role)",
+      "item": [
+        {
+          "name": "Client gửi role admin → vẫn là reader",
+          "event": [
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": [
+              "pm.variables.set('roleEmail', `pm-role+${Date.now()}@example.com`);"
+            ] } },
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('201', () => pm.response.to.have.status(201));",
+              "const u = pm.response.json().user;",
+              "pm.test('role bị bỏ qua → reader, pending', () => { pm.expect(u.role).to.eql('reader'); pm.expect(u.status).to.eql('pending'); });"
+            ] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/register",
+            "body": { "mode": "raw", "raw": "{\"email\":\"{{roleEmail}}\",\"name\":\"Hacker\",\"password\":\"secret123\",\"confirmPassword\":\"secret123\",\"role\":\"admin\",\"status\":\"active\"}", "options": { "raw": { "language": "json" } } }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Xác thực email",
+      "item": [
+        {
+          "name": "Thiếu token → 400",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400', () => pm.response.to.have.status(400));",
+            "pm.test('message', () => pm.expect(pm.response.json().errors.token).to.eql('Thiếu mã xác thực'));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/verify-email",
+            "body": { "mode": "raw", "raw": "{}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "Token sai định dạng → 400",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400', () => pm.response.to.have.status(400));",
+            "pm.test('message', () => pm.expect(pm.response.json().errors.token).to.eql('Mã xác thực không hợp lệ'));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/verify-email",
+            "body": { "mode": "raw", "raw": "{\"token\":\"xyz\"}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "Token không tồn tại → 400",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400', () => pm.response.to.have.status(400));",
+            "pm.test('message', () => pm.expect(pm.response.json().message).to.include('không hợp lệ'));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/verify-email",
+            "body": { "mode": "raw", "raw": "{\"token\":\"0000000000000000000000000000000000000000000000000000000000000000\"}", "options": { "raw": { "language": "json" } } }
+          }
+        }
+      ]
+    }
+  ]
+}

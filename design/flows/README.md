@@ -44,4 +44,18 @@ Các điểm ảnh hưởng trực tiếp tới schema:
 7. **Phiếu phạt** (2.5.2): có đính kèm ảnh biên lai (Supabase Storage) không?
 8. **Chặn mượn khi đang có sách quá hạn** (2.3.1): ngoài chặn khi còn phiếu phạt?
 9. **Phí trả muộn khi Mất** (2.4.2) và cách tính (mức cố định hay theo ngày).
-10. **Trả sách trực tiếp tại quầy** không qua yêu cầu của độc giả (2.4.2).
+10. **Trả sách trực tiếp tại quầy** không qua yêu cầu của độc giả (2.4.2). **Chốt 2026-10-23: có làm.** Sách hư hỏng không quay lại kho.
+
+## Bổ sung 2026-10-22: Upload file
+
+Người dùng yêu cầu thêm **ảnh đại diện** (2.1.3) và **ảnh bìa sách** (2.2.2 – 2.2.5); `PRD.md` đã được sửa theo, với sự đồng ý của người dùng. Ảnh biên lai phiếu phạt (điểm 7, tùy chọn) đã có từ trước, giữ nguyên. Các flow 2.1.3, 2.2.2, 2.2.3, 2.2.4, 2.2.5 đã cập nhật; phần bổ sung **đã được duyệt ngày 2026-10-23**.
+
+Quy tắc chung cho mọi upload:
+
+- Định dạng JPG, PNG, WebP; tối đa 2 MB (đã ghi trong PRD cho ảnh đại diện và ảnh bìa). `[Giả định]` Ảnh biên lai dùng cùng giới hạn.
+- `[Giả định]` Client gửi file lên Express (multipart, `multer` lưu trong bộ nhớ), server kiểm tra rồi upload lên Supabase Storage bằng service role key. Client không upload thẳng lên Storage. Giới hạn 2 MB cũng nằm dưới giới hạn body 4.5 MB của Vercel Functions.
+- Server kiểm tra định dạng theo magic bytes, không tin đuôi file hay `Content-Type`.
+- Tên file trên Storage do server sinh ngẫu nhiên (UUID), không dùng tên file gốc. DB chỉ lưu đường dẫn trong bucket, không lưu URL đầy đủ.
+- Thứ tự: upload file mới → ghi DB → xóa file cũ. Ghi DB lỗi thì xóa file mới; xóa file cũ lỗi thì chỉ ghi log.
+- `[Giả định]` Bucket: `book-covers` và `avatars` **public** (ảnh bìa xem không cần đăng nhập; tên file ngẫu nhiên nên khó đoán), `receipts` **private** (chỉ đọc qua signed URL ngắn hạn do server cấp cho chính độc giả và nhân viên).
+- `[Giả định]` Không resize hay nén ảnh ở server.

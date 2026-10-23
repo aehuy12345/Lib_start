@@ -54,7 +54,15 @@ export function AuthProvider({ children }) {
     navigate('/login', { replace: true })
   }, [navigate])
 
-  const value = useMemo(() => ({ ...state, login, logout }), [state, login, logout])
+  // Hồ sơ đổi tên (2.1.3) thì cập nhật luôn user trong phiên để header hiện tên mới.
+  const updateUser = useCallback((patch) => {
+    setState((prev) => (prev.user ? { ...prev, user: { ...prev.user, ...patch } } : prev))
+  }, [])
+
+  const value = useMemo(
+    () => ({ ...state, login, logout, updateUser }),
+    [state, login, logout, updateUser],
+  )
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 

@@ -11,6 +11,11 @@ const USERS = [
   { email: 'test.admin@example.com', name: 'Test Admin', role: 'admin', status: 'active' },
   { email: 'test.pending@example.com', name: 'Test Pending', role: 'reader', status: 'pending' },
   { email: 'test.disabled@example.com', name: 'Test Disabled', role: 'reader', status: 'disabled' },
+  // 2.1.3: API/E2E test đổi hồ sơ và mật khẩu trên tài khoản riêng; mỗi lần seed trả về trạng thái trống.
+  {
+    email: 'test.profile@example.com', name: 'Test Profile', role: 'reader', status: 'active',
+    phone: null, address: null, avatarPath: null,
+  },
 ];
 
 async function main() {

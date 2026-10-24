@@ -24,6 +24,9 @@ const USERS = [
   { email: 'test.overdue@example.com', name: 'Test Overdue', role: 'reader', status: 'active' },
   // 2.3.1: độc giả gửi yêu cầu mượn trong API/E2E test (xem seedBorrowRequest).
   { email: 'test.requester@example.com', name: 'Test Requester', role: 'reader', status: 'active' },
+  // 2.3.2: đơn chờ duyệt cho Postman (test.approvee) và E2E (test.queue), xem seedBorrowApproval.
+  { email: 'test.approvee@example.com', name: 'Test Approvee', role: 'reader', status: 'active' },
+  { email: 'test.queue@example.com', name: 'Test Queue', role: 'reader', status: 'active' },
 ];
 
 async function main() {
@@ -46,6 +49,7 @@ async function main() {
   await seedBookDetail(prisma);
   await seedBookEdit(prisma);
   await seedBorrowRequest(prisma);
+  await seedBorrowApproval(prisma);
   await prisma.$disconnect();
 }
 
@@ -316,6 +320,48 @@ async function seedBorrowRequest(prisma) {
     data: { ...processed, status: 'rejected', processedAt: at(10), createdAt: at(11), rejectReason: 'Dữ liệu test: từ chối' },
   });
   console.log(`category  "${CATEGORY_BORROW}" (id ${category.id}): MS 01 id ${api.id}, MS 02 id ${e2e.id}, MS 03 id ${out.id}, MS 04 id ${again.id} cho 2.3.1`);
+}
+
+// 2.3.2: thể loại "Test Duyệt Mượn", mỗi sách có đúng một đơn Chờ xác nhận.
+//   DM 01 API Xác Nhận (test.approvee, có sẵn 2) → Postman xác nhận, rồi xác nhận/từ chối lại → 409
+//   DM 02 API Từ Chối  (test.approvee)           → Postman kiểm tra lý do rỗng/quá dài rồi từ chối
+//   DM 03 API Hết      (test.approvee, có sẵn 0) → xác nhận → 409 out_of_stock, rồi từ chối "Hết sách"
+//   DM 04 E2E Xác Nhận / DM 05 E2E Từ Chối / DM 06 E2E Hết (test.queue) → E2E
+//   DM 07 Phạt (test.fined) → unpaid_fine; DM 08 Vô Hiệu (test.disabled) → reader_inactive;
+//   DM 09 Quá Hạn (test.overdue) → overdue
+// Đơn tạo cách đây 60+ ngày để nằm ở trang 1 (danh sách xếp cũ nhất trước).
+const CATEGORY_APPROVAL = 'Test Duyệt Mượn';
+
+async function seedBorrowApproval(prisma) {
+  const ids = Object.fromEntries((await prisma.user.findMany({
+    where: { email: { in: ['approvee', 'queue', 'fined', 'disabled', 'overdue'].map((n) => `test.${n}@example.com`) } },
+    select: { id: true, email: true },
+  })).map((u) => [u.email.slice(5, u.email.indexOf('@')), u.id]));
+  const category = await prisma.category.findFirst({ where: { name: CATEGORY_APPROVAL, deletedAt: null } })
+    ?? await prisma.category.create({ data: { name: CATEGORY_APPROVAL } });
+  const base = { author: 'Tác Giả DM', publishYear: 2020, description: 'Dữ liệu test 2.3.2', categoryId: category.id };
+  const inStock = (n) => ({ totalQuantity: n, availableQuantity: n });
+  const outOfStock = { totalQuantity: 1, availableQuantity: 0, damagedQuantity: 1 };
+  const FIXTURES = [
+    ['Test Sách DM 01 API Xác Nhận', 'approvee', inStock(2), 14],
+    ['Test Sách DM 02 API Từ Chối', 'approvee', inStock(2), 14],
+    ['Test Sách DM 03 API Hết', 'approvee', outOfStock, 14],
+    ['Test Sách DM 04 E2E Xác Nhận', 'queue', inStock(1), 21],
+    ['Test Sách DM 05 E2E Từ Chối', 'queue', inStock(1), 14],
+    ['Test Sách DM 06 E2E Hết', 'queue', outOfStock, 14],
+    ['Test Sách DM 07 Phạt', 'fined', inStock(1), 14],
+    ['Test Sách DM 08 Vô Hiệu', 'disabled', inStock(1), 14],
+    ['Test Sách DM 09 Quá Hạn', 'overdue', inStock(1), 14],
+  ];
+  const lines = [];
+  for (const [index, [title, reader, stock, requestedDays]] of FIXTURES.entries()) {
+    const book = await prisma.book.create({ data: { ...base, title, ...stock } });
+    const order = await prisma.borrowOrder.create({
+      data: { readerId: ids[reader], bookId: book.id, requestedDays, createdAt: new Date(Date.now() - (70 - index) * DAY) },
+    });
+    lines.push(`${title.slice(10, 15)} book ${book.id} order ${order.id}`);
+  }
+  console.log(`category  "${CATEGORY_APPROVAL}" (id ${category.id}) cho 2.3.2: ${lines.join(', ')}`);
 }
 
 main().catch((err) => {

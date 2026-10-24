@@ -12,3 +12,16 @@ export const requestedDaysRules = {
     return (days >= 1 && days <= MAX_BORROW_DAYS) || INVALID_DAYS
   },
 }
+
+// 2.3.2 edge 3, khớp với rejectBorrowSchema: trim, bắt buộc, tối đa 500 ký tự.
+export const REJECT_REASON_MAX = 500
+export const REASON_REQUIRED = 'Lý do từ chối là bắt buộc'
+export const REASON_TOO_LONG = `Lý do từ chối tối đa ${REJECT_REASON_MAX} ký tự`
+export const OUT_OF_STOCK_REASON = 'Hết sách'
+
+export function validateRejectReason(value) {
+  const reason = String(value ?? '').trim()
+  if (!reason) return REASON_REQUIRED
+  if (reason.length > REJECT_REASON_MAX) return REASON_TOO_LONG
+  return null
+}

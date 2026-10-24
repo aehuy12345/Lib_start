@@ -13,4 +13,21 @@ const createBorrowSchema = Joi.object({
     .messages({ '*': INVALID_DAYS }),
 });
 
-module.exports = { createBorrowSchema, DEFAULT_DAYS, MAX_DAYS, INVALID_DAYS };
+const REASON_MAX = 500;
+const REASON_REQUIRED = 'Lý do từ chối là bắt buộc';
+const REASON_TOO_LONG = `Lý do từ chối tối đa ${REASON_MAX} ký tự`;
+
+// 2.3.2 edge 3: trim trước, chỉ khoảng trắng coi là rỗng; [Giả định] tối đa 500 ký tự (cột varchar(500)).
+const rejectBorrowSchema = Joi.object({
+  reason: Joi.string().trim().max(REASON_MAX).required()
+    .messages({ 'string.max': REASON_TOO_LONG, '*': REASON_REQUIRED }),
+});
+
+const pendingQuerySchema = Joi.object({
+  page: Joi.number().integer().min(1).max(INT32_MAX).default(1).failover(1),
+});
+
+module.exports = {
+  createBorrowSchema, rejectBorrowSchema, pendingQuerySchema,
+  DEFAULT_DAYS, MAX_DAYS, INVALID_DAYS, REASON_MAX, REASON_REQUIRED, REASON_TOO_LONG,
+};

@@ -20,7 +20,10 @@ export default function DashboardPage() {
             <Link to="/reader/profile" className="font-medium text-blue-600 hover:underline">Hồ sơ</Link>
           )}
           {user.role !== 'reader' && (
-            <Link to={`/${user.role}/categories`} className="font-medium text-blue-600 hover:underline">Thể loại sách</Link>
+            <>
+              <Link to={`/${user.role}/books/new`} className="font-medium text-blue-600 hover:underline">Thêm Sách Mới</Link>
+              <Link to={`/${user.role}/categories`} className="font-medium text-blue-600 hover:underline">Thể loại sách</Link>
+            </>
           )}
           <span className="text-slate-700">{user.name}</span>
           <button type="button" onClick={logout} className="font-medium text-blue-600 hover:underline">

@@ -1,4 +1,5 @@
 const crypto = require('node:crypto');
+const { Prisma } = require('@prisma/client');
 const { HttpError } = require('../../lib/httpError');
 const { detectImageType } = require('../../lib/imageType');
 const { MAX_IMAGE_BYTES, INVALID_IMAGE } = require('../../middlewares/upload');
@@ -7,6 +8,19 @@ const COVER_BUCKET = 'book-covers';
 const ISBN_TAKEN = 'ISBN đã tồn tại. Nếu là cùng đầu sách, hãy cập nhật số lượng ở sách đã có';
 const CATEGORY_GONE = 'Thể loại không tồn tại hoặc đã bị xóa, vui lòng chọn lại';
 const DUPLICATE_TITLE = 'Lưu ý: đã có sách cùng tên và tác giả';
+const PAGE_SIZE = 10;
+
+// Edge 6: luôn có id làm tiêu chí phụ để hai sách bằng nhau không đổi chỗ giữa các trang.
+const ORDER_BY = {
+  name: Prisma.sql`b.title ASC, b.id ASC`,
+  newest: Prisma.sql`b.publish_year DESC, b.id DESC`,
+  popular: Prisma.sql`b.borrow_count DESC, b.id ASC`,
+};
+
+// Edge 2: từ khóa đi qua tham số; chỉ cần escape ký tự wildcard của LIKE (escape mặc định là \).
+function escapeLike(text) {
+  return text.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
 
 function isUniqueViolation(err) {
   return err?.code === 'P2002';
@@ -123,9 +137,59 @@ function createBookService({
     return { book: toBook(row), warning: await duplicateWarning(row) };
   }
 
-  return { createBook };
+  function toListItem(row) {
+    return {
+      id: row.id,
+      title: row.title,
+      author: row.author,
+      publishYear: row.publishYear,
+      category: { id: row.categoryId, name: row.categoryName },
+      coverUrl: storage.publicUrl(COVER_BUCKET, row.coverPath),
+      availableQuantity: row.availableQuantity,
+      borrowedQuantity: row.borrowedQuantity,
+    };
+  }
+
+  // 2.2.3, công khai. Query đã qua Joi: { q?, categoryId?, sort, page }.
+  async function listBooks({ q, categoryId, sort = 'name', page = 1 }) {
+    if (categoryId) {
+      const category = await prisma.category.findFirst({ where: { id: categoryId, deletedAt: null }, select: { id: true } });
+      if (!category) throw new HttpError(400, CATEGORY_GONE, { categoryId: CATEGORY_GONE });
+    }
+
+    const conditions = [Prisma.sql`b.deleted_at IS NULL`];
+    if (categoryId) conditions.push(Prisma.sql`b.category_id = ${categoryId}`);
+    if (q) {
+      // Edge 3 [Giả định]: không phân biệt hoa thường và dấu tiếng Việt (migration unaccent).
+      const pattern = `%${escapeLike(q)}%`;
+      conditions.push(Prisma.sql`(public.immutable_unaccent(b.title) ILIKE public.immutable_unaccent(${pattern})
+        OR public.immutable_unaccent(b.author) ILIKE public.immutable_unaccent(${pattern}))`);
+    }
+    const where = Prisma.join(conditions, ' AND ');
+
+    const [{ count }] = await prisma.$queryRaw`SELECT count(*)::int AS count FROM books b WHERE ${where}`;
+    const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
+    // Trang vượt tổng số trang → trả trang cuối (flow, nhánh K).
+    const current = Math.min(page, totalPages);
+
+    const rows = count === 0 ? [] : await prisma.$queryRaw`
+      SELECT b.id, b.title, b.author, b.publish_year AS "publishYear", b.cover_path AS "coverPath",
+             b.available_quantity AS "availableQuantity", b.borrowed_quantity AS "borrowedQuantity",
+             c.id AS "categoryId", c.name AS "categoryName"
+      FROM books b JOIN categories c ON c.id = b.category_id
+      WHERE ${where}
+      ORDER BY ${ORDER_BY[sort] ?? ORDER_BY.name}
+      LIMIT ${PAGE_SIZE} OFFSET ${(current - 1) * PAGE_SIZE}`;
+
+    return {
+      books: rows.map(toListItem),
+      pagination: { page: current, pageSize: PAGE_SIZE, total: count, totalPages },
+    };
+  }
+
+  return { createBook, listBooks };
 }
 
 module.exports = {
-  createBookService, COVER_BUCKET, ISBN_TAKEN, CATEGORY_GONE, DUPLICATE_TITLE,
+  createBookService, COVER_BUCKET, ISBN_TAKEN, CATEGORY_GONE, DUPLICATE_TITLE, PAGE_SIZE, escapeLike,
 };

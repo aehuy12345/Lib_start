@@ -35,6 +35,7 @@ async function main() {
 
   await cleanTestBooks(prisma);
   await seedCategories(prisma);
+  await seedBookList(prisma);
   await prisma.$disconnect();
 }
 
@@ -90,6 +91,33 @@ async function seedCategories(prisma) {
   const forBooks = await prisma.category.findFirst({ where: { name: CATEGORY_FOR_NEW_BOOKS, deletedAt: null } })
     ?? await prisma.category.create({ data: { name: CATEGORY_FOR_NEW_BOOKS } });
   console.log(`category  "${CATEGORY_FOR_NEW_BOOKS}" (id ${forBooks.id}) cho E2E 2.2.2`);
+}
+
+// 2.2.3: 12 sách (hơn 1 trang) để test phân trang, sắp xếp, tìm không dấu, ký tự đặc biệt và "Hết sách".
+// Tên bắt đầu bằng "Test Sách " nên cleanTestBooks dọn ở lần seed sau.
+const CATEGORY_LIST = 'Test Danh Sách';
+
+function listFixture(i) {
+  const n = String(i).padStart(2, '0');
+  const book = {
+    title: `Test Sách DS ${n}`, author: 'Tác Giả DS', publishYear: 2000 + i,
+    borrowCount: i === 3 ? 50 : i, totalQuantity: 2, availableQuantity: 2, borrowedQuantity: 0,
+  };
+  if (i === 5) Object.assign(book, { title: `Test Sách DS ${n} Mắt Biếc`, author: 'Nguyễn Nhật Ánh' });
+  if (i === 7) Object.assign(book, { availableQuantity: 0, borrowedQuantity: 2 });
+  if (i === 9) book.title = `Test Sách DS ${n} 100% Sạch`;
+  return book;
+}
+
+async function seedBookList(prisma) {
+  const category = await prisma.category.findFirst({ where: { name: CATEGORY_LIST, deletedAt: null } })
+    ?? await prisma.category.create({ data: { name: CATEGORY_LIST } });
+  await prisma.book.createMany({
+    data: Array.from({ length: 12 }, (_, k) => ({
+      ...listFixture(k + 1), description: 'Dữ liệu test 2.2.3', categoryId: category.id,
+    })),
+  });
+  console.log(`category  "${CATEGORY_LIST}" (id ${category.id}) có 12 sách cho E2E 2.2.3`);
 }
 
 main().catch((err) => {

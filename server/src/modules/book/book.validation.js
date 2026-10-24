@@ -61,4 +61,27 @@ const createBookSchema = Joi.object({
   quantity,
 });
 
-module.exports = { createBookSchema, INVALID_ISBN };
+const SORTS = ['name', 'newest', 'popular'];
+const SEARCH_MAX = 100;
+const INVALID_CATEGORY = 'Thể loại không hợp lệ';
+
+// PRD 2.2.3. Tham số lạ không làm hỏng trang: sort lạ → name, page sai → 1 (flow, nhánh "Không").
+// Riêng categoryId sai thì trả 400 để client biết bộ lọc không còn đúng.
+const listBooksQuerySchema = Joi.object({
+  // Edge 4: chỉ khoảng trắng coi như không có từ khóa. Từ khóa quá dài bị cắt, không báo lỗi.
+  // `?q=a&q=b` (mảng) cũng coi như không có từ khóa.
+  q: Joi.any().custom((value) => (typeof value === 'string' ? value.trim().slice(0, SEARCH_MAX) || undefined : undefined)),
+  categoryId: Joi.number().integer().min(1).max(INT32_MAX).empty('')
+    .messages({
+      'number.base': INVALID_CATEGORY,
+      'number.integer': INVALID_CATEGORY,
+      'number.min': INVALID_CATEGORY,
+      'number.max': INVALID_CATEGORY,
+    }),
+  sort: Joi.string().valid(...SORTS).default('name').failover('name'),
+  page: Joi.number().integer().min(1).max(INT32_MAX).default(1).failover(1),
+});
+
+module.exports = {
+  createBookSchema, listBooksQuerySchema, INVALID_ISBN, INVALID_CATEGORY, SEARCH_MAX,
+};

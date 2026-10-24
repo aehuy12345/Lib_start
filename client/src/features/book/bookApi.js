@@ -8,3 +8,9 @@ export async function createBook(values, cover) {
   const { data } = await api.post('/books', form)
   return data
 }
+
+// 2.2.3: công khai. params: { q, categoryId, sort, page } (đã bỏ giá trị rỗng).
+export async function listBooks(params) {
+  const { data } = await api.get('/books', { params })
+  return data
+}

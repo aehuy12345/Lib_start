@@ -16,6 +16,7 @@ export default function DashboardPage() {
       <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-3">
         <h1 className="text-lg font-semibold text-slate-900">{TITLES[user.role]}</h1>
         <div className="flex items-center gap-4 text-sm">
+          <Link to="/books" className="font-medium text-blue-600 hover:underline">Danh sách sách</Link>
           {user.role === 'reader' && (
             <Link to="/reader/profile" className="font-medium text-blue-600 hover:underline">Hồ sơ</Link>
           )}

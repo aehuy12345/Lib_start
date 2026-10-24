@@ -27,7 +27,14 @@ const pendingQuerySchema = Joi.object({
   page: Joi.number().integer().min(1).max(INT32_MAX).default(1).failover(1),
 });
 
+// 2.3.3: lọc theo trạng thái hiển thị; giá trị lạ hoặc page sai quay về mặc định như danh sách sách (2.2.3).
+const HISTORY_FILTERS = ['all', 'pending', 'borrowing', 'overdue', 'returned', 'rejected'];
+const historyQuerySchema = Joi.object({
+  status: Joi.string().valid(...HISTORY_FILTERS).default('all').failover('all'),
+  page: Joi.number().integer().min(1).max(INT32_MAX).default(1).failover(1),
+});
+
 module.exports = {
-  createBorrowSchema, rejectBorrowSchema, pendingQuerySchema,
+  createBorrowSchema, rejectBorrowSchema, pendingQuerySchema, historyQuerySchema, HISTORY_FILTERS,
   DEFAULT_DAYS, MAX_DAYS, INVALID_DAYS, REASON_MAX, REASON_REQUIRED, REASON_TOO_LONG,
 };

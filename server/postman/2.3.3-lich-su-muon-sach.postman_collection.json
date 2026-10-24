@@ -1,0 +1,1462 @@
+{
+  "info": {
+    "name": "Lib_start - 2.3.3 Lịch sử mượn sách và gia hạn",
+    "description": "API test cho 2.3.3 (design/flows/2.3.3-lich-su-muon-sach.md). Bản gốc trong repo: server/postman/2.3.3-lich-su-muon-sach.postman_collection.json. Chạy `node scripts/seed-test-users.js` trước (thể loại \"Test Lịch Sử Mượn\": test.historian có 12 đơn hiển thị LS 01..08 + 1 đơn đã hủy LS 09). Chạy theo thứ tự; cloud Postman không gọi được localhost nên chạy bằng newman.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Chuẩn bị",
+      "item": [
+        {
+          "name": "reader đăng nhập",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('readerToken', pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"test.historian@example.com\",\"password\":\"{{password}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "other đăng nhập",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('otherToken', pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"test.reader@example.com\",\"password\":\"{{password}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "librarian đăng nhập",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('librarianToken', pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"test.librarian@example.com\",\"password\":\"{{password}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "admin đăng nhập",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('adminToken', pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"test.admin@example.com\",\"password\":\"{{password}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Xem lịch sử",
+      "item": [
+        {
+          "name": "Trang 1: 10 đơn mới nhất trước, 12 đơn (không tính đơn đã hủy), lấy id đơn LS",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const vnToday = () => new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);",
+                  "const addDays = (d, n) => { const x = new Date(`${d}T00:00:00Z`); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };",
+                  "const { orders, pagination, today } = pm.response.json();",
+                  "pm.test('phân trang 10/trang, 12 đơn, 2 trang', () => pm.expect(pagination).to.eql({ page: 1, pageSize: 10, total: 12, totalPages: 2 }));",
+                  "pm.test('10 đơn trên trang 1', () => pm.expect(orders.length).to.eql(10));",
+                  "pm.test('today theo giờ VN', () => pm.expect(today).to.eql(vnToday()));",
+                  "pm.test('mới nhất trước', () => { const t = orders.map((o) => Date.parse(o.createdAt)); pm.expect(t).to.eql([...t].sort((a, b) => b - a)); });",
+                  "pm.test('chỉ đơn LS của test.historian', () => orders.forEach((o) => pm.expect(o.book.title).to.match(/^Test Sách LS 0[1-7]/)));",
+                  "const ls01 = orders.find((o) => o.book.title === 'Test Sách LS 01 Gia Hạn');",
+                  "const ls02 = orders.find((o) => o.book.title === 'Test Sách LS 02 Đã Gia Hạn');",
+                  "const ls03 = orders.find((o) => o.book.title === 'Test Sách LS 03 Quá Hạn');",
+                  "const ls04 = orders.find((o) => o.book.title === 'Test Sách LS 04 Hôm Nay');",
+                  "const ls05 = orders.find((o) => o.book.title === 'Test Sách LS 05 Chờ Trả');",
+                  "const ls06 = orders.find((o) => o.book.title === 'Test Sách LS 06 Chờ Duyệt');",
+                  "const ls07 = orders.find((o) => o.book.title === 'Test Sách LS 07 Đã Trả');",
+                  "for (const [k, o] of Object.entries({ ls01, ls02, ls03, ls04, ls05, ls06, ls07 })) { pm.test(`có đơn ${k}`, () => pm.expect(o).to.be.an('object')); if (o) pm.collectionVariables.set(`${k}Order`, o.id); }",
+                  "pm.collectionVariables.set('ls01Due', ls01.dueDate); pm.collectionVariables.set('ls01Book', ls01.book.id);",
+                  "pm.test('Đang mượn: tên, tác giả, ngày mượn, hạn trả, số ngày còn lại', () => { pm.expect(ls01).to.include({ status: 'borrowing', dueDate: addDays(today, 5), daysLeft: 5, extensionCount: 0, canExtend: true, hasPendingReturn: false }); pm.expect(ls01.book.author).to.eql('Tác Giả LS'); pm.expect(ls01.borrowedAt).to.be.a('string'); });",
+                  "pm.test('đã gia hạn 1 lần → không còn nút gia hạn', () => pm.expect(ls02).to.include({ status: 'borrowing', extensionCount: 1, canExtend: false }));",
+                  "pm.test('Quá hạn suy ra từ hạn trả, số ngày âm', () => pm.expect(ls03).to.include({ status: 'overdue', daysLeft: -2, canExtend: false }));",
+                  "pm.test('đúng ngày hạn vẫn Đang mượn và gia hạn được', () => pm.expect(ls04).to.include({ status: 'borrowing', dueDate: today, daysLeft: 0, canExtend: true }));",
+                  "pm.test('có yêu cầu trả chờ → không gia hạn', () => pm.expect(ls05).to.include({ hasPendingReturn: true, canExtend: false }));",
+                  "pm.test('Chờ xác nhận chưa có hạn trả', () => pm.expect(ls06).to.include({ status: 'pending', dueDate: null, daysLeft: null, canExtend: false }));",
+                  "pm.test('Đã trả có ngày mượn và ngày trả', () => { pm.expect(ls07.status).to.eql('returned'); pm.expect(ls07.returnedAt).to.be.a('string'); pm.expect(ls07.borrowedAt).to.be.a('string'); pm.expect(ls07.daysLeft).to.eql(null); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/mine",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "mine"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{readerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Trang 2: đơn Bị từ chối kèm lý do",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const { orders, pagination } = pm.response.json();",
+                  "pm.test('trang 2 có 2 đơn', () => { pm.expect(pagination.page).to.eql(2); pm.expect(orders.length).to.eql(2); });",
+                  "const ls08 = orders.find((o) => o.book.title === 'Test Sách LS 08 Từ Chối');",
+                  "pm.test('Bị từ chối có lý do', () => pm.expect(ls08).to.include({ status: 'rejected', rejectReason: 'Dữ liệu test: sách đang được bảo trì' }));",
+                  "pm.collectionVariables.set('ls08Order', ls08.id);",
+                  "pm.test('không có đơn đã hủy LS 09', () => pm.expect(orders.some((o) => o.book.title.startsWith('Test Sách LS 09'))).to.eql(false));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/mine?page=2",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "mine"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "2"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{readerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Edge 6: trang vượt quá → trang cuối",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('page 2', () => pm.expect(pm.response.json().pagination.page).to.eql(2));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/mine?page=99",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "mine"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "99"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{readerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lọc pending → 1 đơn",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const { orders, pagination } = pm.response.json();",
+                  "pm.test('tổng 1', () => pm.expect(pagination.total).to.eql(1));",
+                  "pm.test('chỉ trạng thái pending', () => orders.forEach((o) => pm.expect(o.status).to.eql('pending')));",
+                  "pm.test('đúng sách', () => pm.expect([...new Set(orders.map((o) => o.book.title))].sort()).to.eql([\"Test Sách LS 06 Chờ Duyệt\"].sort()));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/mine?status=pending",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "mine"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "pending"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{readerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lọc borrowing → 4 đơn",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const { orders, pagination } = pm.response.json();",
+                  "pm.test('tổng 4', () => pm.expect(pagination.total).to.eql(4));",
+                  "pm.test('chỉ trạng thái borrowing', () => orders.forEach((o) => pm.expect(o.status).to.eql('borrowing')));",
+                  "pm.test('đúng sách', () => pm.expect([...new Set(orders.map((o) => o.book.title))].sort()).to.eql([\"Test Sách LS 01 Gia Hạn\",\"Test Sách LS 02 Đã Gia Hạn\",\"Test Sách LS 04 Hôm Nay\",\"Test Sách LS 05 Chờ Trả\"].sort()));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/mine?status=borrowing",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "mine"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "borrowing"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{readerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lọc overdue → 1 đơn",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const { orders, pagination } = pm.response.json();",
+                  "pm.test('tổng 1', () => pm.expect(pagination.total).to.eql(1));",
+                  "pm.test('chỉ trạng thái overdue', () => orders.forEach((o) => pm.expect(o.status).to.eql('overdue')));",
+                  "pm.test('đúng sách', () => pm.expect([...new Set(orders.map((o) => o.book.title))].sort()).to.eql([\"Test Sách LS 03 Quá Hạn\"].sort()));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/mine?status=overdue",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "mine"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "overdue"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{readerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lọc returned → 5 đơn",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const { orders, pagination } = pm.response.json();",
+                  "pm.test('tổng 5', () => pm.expect(pagination.total).to.eql(5));",
+                  "pm.test('chỉ trạng thái returned', () => orders.forEach((o) => pm.expect(o.status).to.eql('returned')));",
+                  "pm.test('đúng sách', () => pm.expect([...new Set(orders.map((o) => o.book.title))].sort()).to.eql([\"Test Sách LS 07 Đã Trả\"].sort()));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/mine?status=returned",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "mine"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "returned"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{readerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lọc rejected → 1 đơn",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const { orders, pagination } = pm.response.json();",
+                  "pm.test('tổng 1', () => pm.expect(pagination.total).to.eql(1));",
+                  "pm.test('chỉ trạng thái rejected', () => orders.forEach((o) => pm.expect(o.status).to.eql('rejected')));",
+                  "pm.test('đúng sách', () => pm.expect([...new Set(orders.map((o) => o.book.title))].sort()).to.eql([\"Test Sách LS 08 Từ Chối\"].sort()));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/mine?status=rejected",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "mine"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "rejected"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{readerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lọc trạng thái lạ (cancelled) → coi như tất cả",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('tất cả, trang 1', () => pm.expect(pm.response.json().pagination).to.include({ total: 12, page: 1 }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/mine?status=cancelled&page=abc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "mine"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "cancelled"
+                },
+                {
+                  "key": "page",
+                  "value": "abc"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{readerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Edge 1: độc giả khác không thấy đơn của test.historian",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('không có sách LS', () => pm.response.json().orders.forEach((o) => pm.expect(o.book.title).to.not.match(/^Test Sách LS/)));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/mine?page=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "mine"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{otherToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Phân quyền",
+      "item": [
+        {
+          "name": "GET /mine: không token → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/mine",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "mine"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "GET /mine: librarian → 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/mine",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "mine"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{librarianToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /mine: admin → 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/mine",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "mine"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "extend: không token → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/{{ls01Order}}/extend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "{{ls01Order}}",
+                "extend"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "extend: librarian → 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/{{ls01Order}}/extend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "{{ls01Order}}",
+                "extend"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{librarianToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "extend: id chữ → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/abc/extend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "abc",
+                "extend"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{readerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "extend: đơn không tồn tại → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/2147483647/extend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "2147483647",
+                "extend"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{readerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Edge 1: gia hạn đơn của người khác → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));",
+                  "pm.test('message', () => pm.expect(pm.response.json().message).to.eql('Không tìm thấy đơn mượn'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/{{ls01Order}}/extend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "{{ls01Order}}",
+                "extend"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{otherToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Gia hạn",
+      "item": [
+        {
+          "name": "Gia hạn LS 01 → 200, hạn trả +7 ngày",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const vnToday = () => new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);",
+                  "const addDays = (d, n) => { const x = new Date(`${d}T00:00:00Z`); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };",
+                  "const { message, order } = pm.response.json();",
+                  "pm.test('message', () => pm.expect(message).to.eql('Đã gia hạn thêm 7 ngày'));",
+                  "pm.test('hạn mới = hạn cũ + 7', () => pm.expect(order).to.eql({ id: Number(pm.collectionVariables.get('ls01Order')), dueDate: addDays(pm.collectionVariables.get('ls01Due'), 7), extensionCount: 1, daysLeft: 12 }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/{{ls01Order}}/extend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "{{ls01Order}}",
+                "extend"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{readerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Edge 2: gia hạn LS 01 lần nữa → 409 already_extended",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('reason already_extended', () => pm.expect(pm.response.json().reason).to.eql('already_extended'));",
+                  "pm.test('message', () => pm.expect(pm.response.json().message).to.eql('Mỗi đơn chỉ được gia hạn 1 lần'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/{{ls01Order}}/extend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "{{ls01Order}}",
+                "extend"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{readerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "LS 02 đã gia hạn trước → 409 already_extended",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('reason already_extended', () => pm.expect(pm.response.json().reason).to.eql('already_extended'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/{{ls02Order}}/extend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "{{ls02Order}}",
+                "extend"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{readerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "LS 03 quá hạn → 409 overdue",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('reason overdue', () => pm.expect(pm.response.json().reason).to.eql('overdue'));",
+                  "pm.test('message', () => pm.expect(pm.response.json().message).to.eql('Đơn đã quá hạn, không thể gia hạn'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/{{ls03Order}}/extend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "{{ls03Order}}",
+                "extend"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{readerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "LS 05 có yêu cầu trả chờ → 409 pending_return",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('reason pending_return', () => pm.expect(pm.response.json().reason).to.eql('pending_return'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/{{ls05Order}}/extend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "{{ls05Order}}",
+                "extend"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{readerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "LS 06 chờ xác nhận → 409 not_borrowing",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('reason not_borrowing', () => pm.expect(pm.response.json().reason).to.eql('not_borrowing'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/{{ls06Order}}/extend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "{{ls06Order}}",
+                "extend"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{readerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "LS 07 đã trả → 409 not_borrowing",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('reason not_borrowing', () => pm.expect(pm.response.json().reason).to.eql('not_borrowing'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/{{ls07Order}}/extend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "{{ls07Order}}",
+                "extend"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{readerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "LS 08 bị từ chối → 409 not_borrowing",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('reason not_borrowing', () => pm.expect(pm.response.json().reason).to.eql('not_borrowing'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/{{ls08Order}}/extend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "{{ls08Order}}",
+                "extend"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{readerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "LS 04 đúng ngày hạn → 200, hạn mới = hôm nay + 7",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const vnToday = () => new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);",
+                  "const addDays = (d, n) => { const x = new Date(`${d}T00:00:00Z`); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };",
+                  "pm.test('hạn mới', () => pm.expect(pm.response.json().order).to.include({ dueDate: addDays(vnToday(), 7), daysLeft: 7, extensionCount: 1 }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/{{ls04Order}}/extend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "{{ls04Order}}",
+                "extend"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{readerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lịch sử sau gia hạn: LS 01, 04 đã gia hạn, hết nút gia hạn",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const vnToday = () => new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);",
+                  "const addDays = (d, n) => { const x = new Date(`${d}T00:00:00Z`); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };",
+                  "const { orders } = pm.response.json();",
+                  "const ls01 = orders.find((o) => o.book.title === 'Test Sách LS 01 Gia Hạn');",
+                  "const ls04 = orders.find((o) => o.book.title === 'Test Sách LS 04 Hôm Nay');",
+                  "pm.test('LS 01', () => pm.expect(ls01).to.include({ dueDate: addDays(pm.collectionVariables.get('ls01Due'), 7), extensionCount: 1, canExtend: false, daysLeft: 12 }));",
+                  "pm.test('LS 04', () => pm.expect(ls04).to.include({ extensionCount: 1, canExtend: false, daysLeft: 7 }));",
+                  "pm.test('không đơn nào còn gia hạn được', () => orders.forEach((o) => pm.expect(o.canExtend).to.eql(false)));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/mine?status=borrowing",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "mine"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "borrowing"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{readerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Gia hạn không đổi kho và version sách LS 01",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('kho và version', () => pm.expect(pm.response.json().book).to.include({ totalQuantity: 3, availableQuantity: 1, borrowedQuantity: 2, version: 1 }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books/{{ls01Book}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books",
+                "{{ls01Book}}"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000/api"
+    },
+    {
+      "key": "password",
+      "value": "Test@1234"
+    }
+  ]
+}

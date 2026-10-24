@@ -27,6 +27,9 @@ const USERS = [
   // 2.3.2: đơn chờ duyệt cho Postman (test.approvee) và E2E (test.queue), xem seedBorrowApproval.
   { email: 'test.approvee@example.com', name: 'Test Approvee', role: 'reader', status: 'active' },
   { email: 'test.queue@example.com', name: 'Test Queue', role: 'reader', status: 'active' },
+  // 2.3.3: lịch sử mượn và gia hạn cho Postman (test.historian) và E2E (test.history), xem seedBorrowHistory.
+  { email: 'test.historian@example.com', name: 'Test Historian', role: 'reader', status: 'active' },
+  { email: 'test.history@example.com', name: 'Test History', role: 'reader', status: 'active' },
 ];
 
 async function main() {
@@ -50,6 +53,7 @@ async function main() {
   await seedBookEdit(prisma);
   await seedBorrowRequest(prisma);
   await seedBorrowApproval(prisma);
+  await seedBorrowHistory(prisma);
   await prisma.$disconnect();
 }
 
@@ -362,6 +366,69 @@ async function seedBorrowApproval(prisma) {
     lines.push(`${title.slice(10, 15)} book ${book.id} order ${order.id}`);
   }
   console.log(`category  "${CATEGORY_APPROVAL}" (id ${category.id}) cho 2.3.2: ${lines.join(', ')}`);
+}
+
+// 2.3.3: thể loại "Test Lịch Sử Mượn", test.historian (Postman) và test.history (E2E) có cùng bộ đơn:
+//   LS 01 Gia Hạn    đang mượn, còn 5 ngày, chưa gia hạn → gia hạn được (+7), lần hai → already_extended
+//   LS 02 Đã Gia Hạn đang mượn, đã gia hạn 1 lần        → already_extended
+//   LS 03 Quá Hạn    hạn trả 2 ngày trước                → Quá hạn, gia hạn → overdue
+//   LS 04 Hôm Nay    hạn trả hôm nay                     → vẫn gia hạn được
+//   LS 05 Chờ Trả    đang mượn, có yêu cầu trả chờ       → pending_return
+//   LS 06 Chờ Duyệt  chờ xác nhận                        → not_borrowing, hủy được
+//   LS 07 Đã Trả     5 đơn đã trả (tổng 12 đơn hiển thị → 2 trang)
+//   LS 08 Từ Chối    bị từ chối, có lý do
+//   LS 09 Đã Hủy     đã hủy → không hiện trong lịch sử
+// createdAt giảm dần theo thứ tự trên: LS 01 mới nhất, đứng đầu trang 1.
+const CATEGORY_HISTORY = 'Test Lịch Sử Mượn';
+const HISTORY_REJECT_REASON = 'Dữ liệu test: sách đang được bảo trì';
+
+async function seedBorrowHistory(prisma) {
+  const readers = await prisma.user.findMany({
+    where: { email: { in: ['test.historian@example.com', 'test.history@example.com'] } }, select: { id: true },
+  });
+  const librarian = await prisma.user.findUnique({ where: { email: 'test.librarian@example.com' }, select: { id: true } });
+  const category = await prisma.category.findFirst({ where: { name: CATEGORY_HISTORY, deletedAt: null } })
+    ?? await prisma.category.create({ data: { name: CATEGORY_HISTORY } });
+  const base = { author: 'Tác Giả LS', publishYear: 2021, description: 'Dữ liệu test 2.3.3', categoryId: category.id };
+  // Sách LS 01..05 đang được cả hai độc giả mượn: kho khớp với số đơn `borrowing`.
+  const TITLES = [
+    'LS 01 Gia Hạn', 'LS 02 Đã Gia Hạn', 'LS 03 Quá Hạn', 'LS 04 Hôm Nay', 'LS 05 Chờ Trả',
+    'LS 06 Chờ Duyệt', 'LS 07 Đã Trả', 'LS 08 Từ Chối', 'LS 09 Đã Hủy',
+  ];
+  const books = [];
+  for (const [index, title] of TITLES.entries()) {
+    const borrowed = index < 5 ? readers.length : 0;
+    books.push(await prisma.book.create({
+      data: { ...base, title: `Test Sách ${title}`, totalQuantity: 3, borrowedQuantity: borrowed, availableQuantity: 3 - borrowed },
+    }));
+  }
+  const at = (daysAgo) => new Date(Date.now() - daysAgo * DAY);
+  const processed = (daysAgo) => ({ processedById: librarian.id, processedAt: at(daysAgo) });
+  const borrowing = (daysAgo, dueIn) => ({
+    status: 'borrowing', ...processed(daysAgo), borrowedAt: at(daysAgo), dueDate: businessDate(dueIn),
+  });
+  for (const { id: readerId } of readers) {
+    let age = 0;
+    const order = (book, data) => prisma.borrowOrder.create({
+      data: { readerId, bookId: book.id, createdAt: at((age += 1) / 24), ...data },
+    });
+    await order(books[0], borrowing(9, 5));
+    await order(books[1], { ...borrowing(15, 3), extensionCount: 1, extendedAt: at(2) });
+    await order(books[2], borrowing(16, -2));
+    await order(books[3], borrowing(14, 0));
+    const waiting = await order(books[4], borrowing(10, 4));
+    await prisma.returnRequest.create({ data: { borrowOrderId: waiting.id, requestedById: readerId } });
+    await order(books[5], {});
+    for (let i = 0; i < 5; i += 1) {
+      await order(books[6], {
+        status: 'returned', ...processed(40 + i * 10), borrowedAt: at(40 + i * 10),
+        dueDate: businessDate(-26 - i * 10), returnedAt: at(30 + i * 10),
+      });
+    }
+    await order(books[7], { status: 'rejected', ...processed(1), rejectReason: HISTORY_REJECT_REASON });
+    await order(books[8], { status: 'cancelled', cancelledAt: at(1) });
+  }
+  console.log(`category  "${CATEGORY_HISTORY}" (id ${category.id}) cho 2.3.3: ${books.map((b) => `${b.title.slice(10, 15)} ${b.id}`).join(', ')}`);
 }
 
 main().catch((err) => {

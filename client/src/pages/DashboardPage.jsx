@@ -18,7 +18,10 @@ export default function DashboardPage() {
         <div className="flex items-center gap-4 text-sm">
           <Link to="/books" className="font-medium text-blue-600 hover:underline">Danh sách sách</Link>
           {user.role === 'reader' && (
-            <Link to="/reader/profile" className="font-medium text-blue-600 hover:underline">Hồ sơ</Link>
+            <>
+              <Link to="/reader/borrow-history" className="font-medium text-blue-600 hover:underline">Lịch sử mượn sách</Link>
+              <Link to="/reader/profile" className="font-medium text-blue-600 hover:underline">Hồ sơ</Link>
+            </>
           )}
           {user.role !== 'reader' && (
             <>

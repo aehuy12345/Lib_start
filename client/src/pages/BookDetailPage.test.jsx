@@ -5,11 +5,13 @@ import BookDetailPage from './BookDetailPage'
 import { AuthProvider } from '../features/auth/AuthContext'
 import { getMe } from '../features/auth/authApi'
 import { deleteBook, getBook, getBorrowEligibility, getBorrowHistory, getDeleteCheck } from '../features/book/bookApi'
+import { cancelBorrowOrder, createBorrowOrder } from '../features/borrow/borrowApi'
 
 vi.mock('../features/auth/authApi', () => ({ login: vi.fn(), getMe: vi.fn() }))
 vi.mock('../features/book/bookApi', () => ({
   getBook: vi.fn(), getBorrowHistory: vi.fn(), getBorrowEligibility: vi.fn(), getDeleteCheck: vi.fn(), deleteBook: vi.fn(),
 }))
+vi.mock('../features/borrow/borrowApi', () => ({ createBorrowOrder: vi.fn(), cancelBorrowOrder: vi.fn() }))
 
 const BOOK = {
   id: 7, title: 'Dế Mèn phiêu lưu ký', author: 'Tô Hoài', isbn: '9780306406157', publishYear: 1941,
@@ -115,7 +117,7 @@ describe('BookDetailPage (2.2.4)', () => {
     expect(getBorrowEligibility).toHaveBeenCalledWith(7)
     expect(getBorrowHistory).not.toHaveBeenCalled()
     await user.click(button)
-    expect(screen.getByRole('status')).toHaveTextContent('đang được phát triển')
+    expect(screen.getByRole('form', { name: 'Yêu cầu mượn sách' })).toBeInTheDocument()
   })
 
   it.each([
@@ -230,5 +232,123 @@ describe('BookDetailPage — Sửa & Xóa (2.2.5)', () => {
     const status = await screen.findByRole('status')
     expect(status).toHaveTextContent('Cập nhật sách thành công')
     expect(status).toHaveTextContent('Lưu ý: đã có sách cùng tên và tác giả')
+  })
+})
+
+describe('BookDetailPage – gửi yêu cầu mượn (2.3.1)', () => {
+  const ELIGIBLE = { canBorrow: true, reason: null, message: null, activeOrder: null }
+  const PENDING = {
+    canBorrow: false, reason: 'already_requested', message: 'Bạn đang mượn hoặc đã gửi yêu cầu mượn sách này',
+    activeOrder: { id: 50, status: 'pending' },
+  }
+
+  async function openForm() {
+    const user = setup({ role: 'reader' })
+    const button = await screen.findByRole('button', { name: 'Mượn sách' })
+    await vi.waitFor(() => expect(button).toBeEnabled())
+    await user.click(button)
+    return { user, input: screen.getByLabelText(/Thời hạn mượn/) }
+  }
+
+  beforeEach(() => {
+    getBorrowEligibility.mockResolvedValue(ELIGIBLE)
+  })
+
+  it('mặc định 14 ngày; gửi → thông báo chờ xác nhận và tải lại điều kiện mượn', async () => {
+    createBorrowOrder.mockResolvedValue({ message: 'Đã gửi yêu cầu mượn, chờ nhân viên xác nhận', order: { id: 50 } })
+    const { user, input } = await openForm()
+    expect(input).toHaveValue(14)
+    getBorrowEligibility.mockResolvedValue(PENDING)
+    await user.click(screen.getByRole('button', { name: 'Gửi yêu cầu' }))
+    expect(createBorrowOrder).toHaveBeenCalledWith(7, 14)
+    expect(await screen.findByRole('status')).toHaveTextContent('Đã gửi yêu cầu mượn, chờ nhân viên xác nhận')
+    expect(screen.queryByRole('form', { name: 'Yêu cầu mượn sách' })).not.toBeInTheDocument()
+    expect(getBorrowEligibility).toHaveBeenCalledTimes(2)
+    expect(await screen.findByRole('button', { name: 'Hủy yêu cầu mượn' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Mượn sách' })).toBeDisabled()
+  })
+
+  it('chọn 30 ngày → gửi đúng số ngày', async () => {
+    createBorrowOrder.mockResolvedValue({ message: 'ok' })
+    const { user, input } = await openForm()
+    await user.clear(input)
+    await user.type(input, '30')
+    await user.click(screen.getByRole('button', { name: 'Gửi yêu cầu' }))
+    expect(createBorrowOrder).toHaveBeenCalledWith(7, 30)
+  })
+
+  it.each(['0', '31', '-3'])('edge 2: %s ngày → lỗi tại chỗ, không gọi API', async (value) => {
+    const { user, input } = await openForm()
+    await user.clear(input)
+    await user.type(input, value)
+    await user.click(screen.getByRole('button', { name: 'Gửi yêu cầu' }))
+    expect(await screen.findByText('Thời hạn phải từ 1 đến 30 ngày')).toBeInTheDocument()
+    expect(createBorrowOrder).not.toHaveBeenCalled()
+  })
+
+  it('server từ chối (vd vừa có phiếu phạt) → đóng form, báo lỗi, khóa nút theo điều kiện mới', async () => {
+    const message = 'Cần thanh toán phiếu phạt trước khi mượn'
+    createBorrowOrder.mockRejectedValue(apiError(409, { message, reason: 'unpaid_fine' }))
+    const { user } = await openForm()
+    getBorrowEligibility.mockResolvedValue({ canBorrow: false, reason: 'unpaid_fine', message, activeOrder: null })
+    await user.click(screen.getByRole('button', { name: 'Gửi yêu cầu' }))
+    const button = screen.getByRole('button', { name: 'Mượn sách' })
+    await vi.waitFor(() => expect(button).toHaveAccessibleDescription(message))
+    expect(button).toBeDisabled()
+    expect(screen.queryByRole('form', { name: 'Yêu cầu mượn sách' })).not.toBeInTheDocument()
+  })
+
+  it('lỗi mạng → báo lỗi trong form, giữ form để gửi lại', async () => {
+    createBorrowOrder.mockRejectedValue(new Error('network'))
+    const { user } = await openForm()
+    await user.click(screen.getByRole('button', { name: 'Gửi yêu cầu' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Không kết nối được máy chủ')
+    expect(screen.getByRole('form', { name: 'Yêu cầu mượn sách' })).toBeInTheDocument()
+  })
+
+  it('Đóng → ẩn form', async () => {
+    const { user } = await openForm()
+    await user.click(screen.getByRole('button', { name: 'Đóng' }))
+    expect(screen.queryByRole('form', { name: 'Yêu cầu mượn sách' })).not.toBeInTheDocument()
+  })
+
+  it('đơn đang chờ → Hủy yêu cầu mượn (xác nhận) → hủy và tải lại', async () => {
+    getBorrowEligibility.mockResolvedValue(PENDING)
+    cancelBorrowOrder.mockResolvedValue({ message: 'Đã hủy yêu cầu mượn' })
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const user = setup({ role: 'reader' })
+    const cancel = await screen.findByRole('button', { name: 'Hủy yêu cầu mượn' })
+    getBorrowEligibility.mockResolvedValue(ELIGIBLE)
+    await user.click(cancel)
+    expect(cancelBorrowOrder).toHaveBeenCalledWith(50)
+    expect(await screen.findByRole('status')).toHaveTextContent('Đã hủy yêu cầu mượn')
+    await vi.waitFor(() => expect(screen.getByRole('button', { name: 'Mượn sách' })).toBeEnabled())
+    expect(screen.queryByRole('button', { name: 'Hủy yêu cầu mượn' })).not.toBeInTheDocument()
+  })
+
+  it('không đồng ý hủy → không gọi API', async () => {
+    getBorrowEligibility.mockResolvedValue(PENDING)
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const user = setup({ role: 'reader' })
+    await user.click(await screen.findByRole('button', { name: 'Hủy yêu cầu mượn' }))
+    expect(cancelBorrowOrder).not.toHaveBeenCalled()
+  })
+
+  it('đơn đang mượn (không còn chờ) → không có nút hủy', async () => {
+    getBorrowEligibility.mockResolvedValue({ ...PENDING, activeOrder: { id: 50, status: 'borrowing' } })
+    setup({ role: 'reader' })
+    const button = await screen.findByRole('button', { name: 'Mượn sách' })
+    await vi.waitFor(() => expect(button).toHaveAccessibleDescription(PENDING.message))
+    expect(screen.queryByRole('button', { name: 'Hủy yêu cầu mượn' })).not.toBeInTheDocument()
+  })
+
+  it('nhân viên vừa xử lý đơn (409) → báo lỗi và tải lại', async () => {
+    getBorrowEligibility.mockResolvedValue(PENDING)
+    cancelBorrowOrder.mockRejectedValue(apiError(409, { message: 'Chỉ hủy được đơn đang chờ xác nhận' }))
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const user = setup({ role: 'reader' })
+    await user.click(await screen.findByRole('button', { name: 'Hủy yêu cầu mượn' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Chỉ hủy được đơn đang chờ xác nhận')
+    expect(getBorrowEligibility).toHaveBeenCalledTimes(2)
   })
 })

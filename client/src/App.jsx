@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './features/auth/AuthContext'
 import RequireAuth from './features/auth/RequireAuth'
 import AddBookPage from './pages/AddBookPage'
+import BooksPage from './pages/BooksPage'
 import CategoriesPage from './pages/CategoriesPage'
 import DashboardPage from './pages/DashboardPage'
 import LoginPage from './pages/LoginPage'
@@ -25,7 +26,9 @@ function App() {
           <Route path="/admin/categories" element={<RequireAuth roles={['admin']}><CategoriesPage /></RequireAuth>} />
           <Route path="/librarian/books/new" element={<RequireAuth roles={['librarian']}><AddBookPage /></RequireAuth>} />
           <Route path="/admin/books/new" element={<RequireAuth roles={['admin']}><AddBookPage /></RequireAuth>} />
-          {/* Trang chủ (danh sách sách 2.2.3) sẽ thêm sau. */}
+          {/* 2.2.3: danh sách sách công khai là trang chủ. */}
+          <Route path="/" element={<Navigate to="/books" replace />} />
+          <Route path="/books" element={<BooksPage />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </AuthProvider>

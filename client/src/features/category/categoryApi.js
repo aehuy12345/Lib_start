@@ -19,3 +19,9 @@ export async function deleteCategory(id) {
   const { data } = await api.delete(`/categories/${id}`)
   return data
 }
+
+// Công khai, cho bộ lọc ở trang danh sách sách (2.2.3).
+export async function listCategoryOptions() {
+  const { data } = await api.get('/categories/options')
+  return data.categories
+}

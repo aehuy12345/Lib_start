@@ -31,6 +31,14 @@ function createCategoryService({ prisma }) {
     return rows.map(toCategory);
   }
 
+  async function listCategoryOptions() {
+    return prisma.category.findMany({
+      where: { deletedAt: null },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true },
+    });
+  }
+
   // Trùng tên (không phân biệt hoa thường, edge 1) do UNIQUE (lower(name)) ở DB chặn,
   // nên hai request đồng thời cũng không tạo được bản trùng.
   async function createCategory({ name }) {
@@ -74,7 +82,7 @@ function createCategoryService({ prisma }) {
     });
   }
 
-  return { listCategories, createCategory, updateCategory, deleteCategory };
+  return { listCategories, listCategoryOptions, createCategory, updateCategory, deleteCategory };
 }
 
 module.exports = { createCategoryService, NAME_TAKEN, NOT_FOUND };

@@ -30,6 +30,8 @@ Tóm tắt các lỗi đã gặp trong quá trình làm và cách sửa. Nhóm t
 
 ## Viết test (Vitest / Playwright)
 
+- **`mockResolvedValue` dùng cho mọi lần gọi làm test URL sai** (2.2.3): mock trả `pagination.page: 2` cho cả lần gọi sau khi đổi bộ lọc, nên trang tự "sửa" URL về `page=2` như thể server chuyển về trang cuối. → Response chỉ dành cho lần tải đầu thì dùng `mockResolvedValueOnce` và đặt trước khi render.
+
 - **Render trang cần đăng nhập mà không bọc `RequireAuth`** (2.1.3): `AuthProvider` đang ở trạng thái `loading` thì `user` là `null`, nên trang crash với `Cannot read properties of null (reading 'name')`. → Trong test, render trang đúng như route thật: `<RequireAuth roles={[...]}><Page /></RequireAuth>`.
 - **E2E chuyển trang ngay sau khi bấm Đăng nhập** (2.1.3): `page.goto()` chạy trước khi request login trả về và token được lưu, nên bị chuyển về `/login`. → Sau khi bấm Đăng nhập, đợi `await expect(page).toHaveURL('/reader')` rồi mới `goto`.
 - **Seed không dọn hết dữ liệu test** (2.2.2): test trùng tên (edge 5) tạo sách `test sách ...` chữ thường, còn seed lọc `startsWith: 'Test Sách '` có phân biệt hoa thường nên bỏ sót. → Lọc dữ liệu test với `mode: 'insensitive'`; sau khi chạy test, chạy seed lại và xem số bản ghi đã dọn có khớp không.

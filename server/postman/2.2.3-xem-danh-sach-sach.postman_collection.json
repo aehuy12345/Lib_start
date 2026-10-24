@@ -1,0 +1,1119 @@
+{
+  "info": {
+    "name": "Lib_start - 2.2.3 Xem danh sách sách",
+    "description": "API test cho 2.2.3 Xem danh sách sách (design/flows/2.2.3-xem-danh-sach-sach.md). Bản gốc trong repo: server/postman/2.2.3-xem-danh-sach-sach.postman_collection.json. Chạy `node scripts/seed-test-users.js` trước (tạo thể loại \"Test Danh Sách\" với 12 sách \"Test Sách DS 01..12\"; DS 03 lượt mượn cao nhất, DS 05 \"Mắt Biếc\" của Nguyễn Nhật Ánh, DS 07 hết sách, DS 09 có ký tự %). Chạy theo thứ tự.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000/api"
+    },
+    {
+      "key": "password",
+      "value": "Test@1234"
+    }
+  ],
+  "item": [
+    {
+      "name": "Đăng nhập",
+      "item": [
+        {
+          "name": "reader đăng nhập",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('readerToken', pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"test.reader@example.com\",\"password\":\"{{password}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "librarian đăng nhập",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('librarianToken', pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"test.librarian@example.com\",\"password\":\"{{password}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "admin đăng nhập",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('adminToken', pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"test.admin@example.com\",\"password\":\"{{password}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Phân quyền (công khai)",
+      "item": [
+        {
+          "name": "GET /categories/options không token → 200, chỉ id + tên",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const list = body.categories.find((c) => c.name === 'Test Danh Sách');",
+                  "pm.test('có thể loại Test Danh Sách', () => pm.expect(list).to.be.an('object'));",
+                  "pm.test('chỉ id + name', () => pm.expect(Object.keys(list).sort()).to.eql(['id', 'name']));",
+                  "pm.collectionVariables.set('listCategoryId', list.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/categories/options",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "options"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /books không token → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('có books + pagination', () => { pm.expect(body.books).to.be.an('array'); pm.expect(body.pagination).to.include({ page: 1, pageSize: 10 }); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /books với token reader → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{readerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/books",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /books với token librarian → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/books",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /books với token admin → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/books",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /books token hỏng → vẫn 200 (không cần đăng nhập)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer hong"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/books",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Danh sách, phân trang, sắp xếp",
+      "item": [
+        {
+          "name": "Mặc định toàn thư viện: tối đa 10 sách/trang",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('<= 10 sách', () => pm.expect(body.books.length).to.be.at.most(10));",
+                  "pm.test('totalPages khớp total', () => pm.expect(body.pagination.totalPages).to.eql(Math.max(1, Math.ceil(body.pagination.total / 10))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lọc thể loại, trang 1: 10/12 sách, Tên A-Z, đủ trường PRD",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const titles = body.books.map((b) => b.title);",
+                  "pm.test('pagination', () => pm.expect(body.pagination).to.eql({ page: 1, pageSize: 10, total: 12, totalPages: 2 }));",
+                  "pm.test('DS 01 → DS 10', () => { pm.expect(titles[0]).to.eql('Test Sách DS 01'); pm.expect(titles[9]).to.eql('Test Sách DS 10'); });",
+                  "pm.test('đủ trường', () => pm.expect(Object.keys(body.books[0]).sort()).to.eql(['author', 'availableQuantity', 'borrowedQuantity', 'category', 'coverUrl', 'id', 'publishYear', 'title']));",
+                  "pm.test('thể loại đúng', () => body.books.forEach((b) => pm.expect(b.category.name).to.eql('Test Danh Sách')));",
+                  "pm.test('chưa có ảnh → coverUrl null', () => pm.expect(body.books[0].coverUrl).to.eql(null));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books?categoryId={{listCategoryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "categoryId",
+                  "value": "{{listCategoryId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lọc thể loại, trang 2: còn 2 sách",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const titles = body.books.map((b) => b.title);",
+                  "pm.test('page 2', () => pm.expect(body.pagination.page).to.eql(2));",
+                  "pm.test('DS 11, DS 12', () => pm.expect(titles).to.eql(['Test Sách DS 11', 'Test Sách DS 12']));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books?categoryId={{listCategoryId}}&page=2",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "categoryId",
+                  "value": "{{listCategoryId}}"
+                },
+                {
+                  "key": "page",
+                  "value": "2"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Trang vượt tổng số trang (99) → trả trang cuối",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const titles = body.books.map((b) => b.title);",
+                  "pm.test('page = 2', () => pm.expect(body.pagination.page).to.eql(2));",
+                  "pm.test('dữ liệu trang cuối', () => pm.expect(titles).to.eql(['Test Sách DS 11', 'Test Sách DS 12']));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books?categoryId={{listCategoryId}}&page=99",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "categoryId",
+                  "value": "{{listCategoryId}}"
+                },
+                {
+                  "key": "page",
+                  "value": "99"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sắp xếp năm xuất bản mới nhất",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const years = body.books.map((b) => b.publishYear);",
+                  "pm.test('DS 12 (2012) đầu tiên', () => pm.expect(body.books[0].title).to.eql('Test Sách DS 12'));",
+                  "pm.test('năm giảm dần', () => pm.expect(years).to.eql([...years].sort((a, b) => b - a)));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books?categoryId={{listCategoryId}}&sort=newest",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "categoryId",
+                  "value": "{{listCategoryId}}"
+                },
+                {
+                  "key": "sort",
+                  "value": "newest"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sắp xếp phổ biến nhất (lượt mượn)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const titles = body.books.map((b) => b.title);",
+                  "pm.test('DS 03 (50 lượt) rồi DS 12, DS 11', () => pm.expect(titles.slice(0, 3)).to.eql(['Test Sách DS 03', 'Test Sách DS 12', 'Test Sách DS 11']));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books?categoryId={{listCategoryId}}&sort=popular",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "categoryId",
+                  "value": "{{listCategoryId}}"
+                },
+                {
+                  "key": "sort",
+                  "value": "popular"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Edge 5: sách hết vẫn hiển thị (DS 07 có sẵn 0, đang mượn 2)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const b = body.books.find((x) => x.title === 'Test Sách DS 07');",
+                  "pm.test('có DS 07', () => pm.expect(b).to.be.an('object'));",
+                  "pm.test('số lượng', () => pm.expect(b).to.include({ availableQuantity: 0, borrowedQuantity: 2 }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books?categoryId={{listCategoryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "categoryId",
+                  "value": "{{listCategoryId}}"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tìm kiếm",
+      "item": [
+        {
+          "name": "Edge 3: tên không dấu \"mat biec\" → Mắt Biếc",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const titles = body.books.map((b) => b.title);",
+                  "pm.test('đúng 1 sách', () => pm.expect(titles).to.eql(['Test Sách DS 05 Mắt Biếc']));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books?q=mat biec",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "mat biec"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Tìm theo tác giả, không phân biệt hoa thường/dấu \"NGUYEN nhat anh\"",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('tác giả Nguyễn Nhật Ánh', () => { pm.expect(body.books.length).to.be.at.least(1); body.books.forEach((b) => pm.expect(b.author).to.eql('Nguyễn Nhật Ánh')); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books?q=NGUYEN nhat anh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "NGUYEN nhat anh"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Tìm kết hợp lọc thể loại: \"ds 1\" → DS 10, 11, 12",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const titles = body.books.map((b) => b.title);",
+                  "pm.test('3 sách', () => pm.expect(titles).to.eql(['Test Sách DS 10', 'Test Sách DS 11', 'Test Sách DS 12']));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books?categoryId={{listCategoryId}}&q=ds 1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "categoryId",
+                  "value": "{{listCategoryId}}"
+                },
+                {
+                  "key": "q",
+                  "value": "ds 1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Edge 2: \"%\" là ký tự thường, không phải wildcard",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const titles = body.books.map((b) => b.title);",
+                  "pm.test('chỉ DS 09', () => pm.expect(titles).to.eql(['Test Sách DS 09 100% Sạch']));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books?categoryId={{listCategoryId}}&q=%25",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "categoryId",
+                  "value": "{{listCategoryId}}"
+                },
+                {
+                  "key": "q",
+                  "value": "%25"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Edge 2: \"_\" là ký tự thường → không có kết quả",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('0 sách', () => pm.expect(body.pagination.total).to.eql(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books?categoryId={{listCategoryId}}&q=_",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "categoryId",
+                  "value": "{{listCategoryId}}"
+                },
+                {
+                  "key": "q",
+                  "value": "_"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Edge 2: dấu nháy đơn không gây lỗi SQL",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('0 sách', () => pm.expect(body.books).to.eql([]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books?q='%20OR%201=1--",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "'%20OR%201=1--"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Edge 4: từ khóa chỉ gồm khoảng trắng = không có từ khóa",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('đủ 12 sách', () => pm.expect(body.pagination.total).to.eql(12));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books?categoryId={{listCategoryId}}&q=%20%20%20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "categoryId",
+                  "value": "{{listCategoryId}}"
+                },
+                {
+                  "key": "q",
+                  "value": "%20%20%20"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Không có kết quả → books rỗng, totalPages 1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('rỗng', () => pm.expect(body).to.eql({ books: [], pagination: { page: 1, pageSize: 10, total: 0, totalPages: 1 } }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books?q=khongtontaizzz",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "khongtontaizzz"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tham số không hợp lệ",
+      "item": [
+        {
+          "name": "sort lạ → mặc định Tên A-Z",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('DS 01 đầu tiên', () => pm.expect(body.books[0].title).to.eql('Test Sách DS 01'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books?categoryId={{listCategoryId}}&sort=hack",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "categoryId",
+                  "value": "{{listCategoryId}}"
+                },
+                {
+                  "key": "sort",
+                  "value": "hack"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "page = -1 → trang 1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('page 1', () => pm.expect(body.pagination.page).to.eql(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books?categoryId={{listCategoryId}}&page=-1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "categoryId",
+                  "value": "{{listCategoryId}}"
+                },
+                {
+                  "key": "page",
+                  "value": "-1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "page = abc → trang 1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('page 1', () => pm.expect(body.pagination.page).to.eql(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books?categoryId={{listCategoryId}}&page=abc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "categoryId",
+                  "value": "{{listCategoryId}}"
+                },
+                {
+                  "key": "page",
+                  "value": "abc"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "categoryId = abc → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "const body = pm.response.json();",
+                  "pm.test('lỗi tại categoryId', () => pm.expect(body.errors.categoryId).to.eql('Thể loại không hợp lệ'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books?categoryId=abc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "categoryId",
+                  "value": "abc"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "categoryId không tồn tại → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "const body = pm.response.json();",
+                  "pm.test('thông báo', () => pm.expect(body.errors.categoryId).to.include('Thể loại không tồn tại'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books?categoryId=999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "categoryId",
+                  "value": "999999"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

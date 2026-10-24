@@ -15,6 +15,13 @@ function parseId(req) {
 // 2.2.1: nhân viên thư viện quản lý thể loại; Admin cũng có toàn quyền, Reader nhận 403 (edge 6).
 function createCategoryRouter(categoryService, requireAuth) {
   const router = express.Router();
+
+  // 2.2.3 [Giả định]: danh sách id + tên cho bộ lọc thể loại ở trang sách công khai; phải đứng trước
+  // router.use bên dưới để không bị yêu cầu đăng nhập. Không trả số sách như trang quản lý.
+  router.get('/options', async (req, res) => {
+    res.json({ categories: await categoryService.listCategoryOptions() });
+  });
+
   router.use(requireAuth, requireRole('librarian', 'admin'));
 
   router.get('/', async (req, res) => {

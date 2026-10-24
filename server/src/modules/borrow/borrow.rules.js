@@ -52,7 +52,40 @@ function addDays(dateString, days) {
   return date.toISOString().slice(0, 10);
 }
 
+// Số ngày từ `from` tới `to` (cùng dạng 'YYYY-MM-DD'); âm khi `to` đã qua.
+function diffDays(to, from) {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000);
+}
+
+// 2.3.3: trạng thái hiển thị; `Quá hạn` suy ra khi đang mượn và ngày VN hiện tại > hạn trả.
+// dueDate/today dạng 'YYYY-MM-DD'.
+function displayStatus({ status, dueDate }, today) {
+  if (status === 'borrowing' && dueDate && today > dueDate) return 'overdue';
+  return status;
+}
+
+const EXTENSION_DAYS = 7;
+const MAX_EXTENSIONS = 1;
+
+const EXTEND_BLOCKED = {
+  not_borrowing: 'Chỉ gia hạn được đơn đang mượn',
+  overdue: 'Đơn đã quá hạn, không thể gia hạn',
+  already_extended: `Mỗi đơn chỉ được gia hạn ${MAX_EXTENSIONS} lần`,
+  pending_return: 'Đang có yêu cầu trả sách, không thể gia hạn',
+};
+
+// Thứ tự theo flow gia hạn 2.3.3. Hạn trả là ngày cuối được trả nên đúng ngày hạn vẫn gia hạn được.
+// Phiếu phạt chưa thanh toán không chặn gia hạn (edge 5).
+function evaluateExtension({ status, dueDate, extensionCount, hasPendingReturn }, today) {
+  if (status !== 'borrowing') return 'not_borrowing';
+  if (today > dueDate) return 'overdue';
+  if (extensionCount >= MAX_EXTENSIONS) return 'already_extended';
+  if (hasPendingReturn) return 'pending_return';
+  return null;
+}
+
 module.exports = {
   MAX_ACTIVE_BORROWS, ACTIVE_STATUSES, INELIGIBLE, evaluateBorrowEligibility,
-  CONFIRM_BLOCKED, evaluateConfirmEligibility, addDays,
+  CONFIRM_BLOCKED, evaluateConfirmEligibility, addDays, diffDays, displayStatus,
+  EXTENSION_DAYS, MAX_EXTENSIONS, EXTEND_BLOCKED, evaluateExtension,
 };

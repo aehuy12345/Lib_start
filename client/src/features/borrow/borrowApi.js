@@ -28,3 +28,17 @@ export async function rejectBorrowOrder(id, reason) {
   const { data } = await api.post(`/borrow-orders/${encodeURIComponent(id)}/reject`, { reason })
   return data
 }
+
+// 2.3.3 (độc giả): lịch sử đơn của chính mình, lọc theo trạng thái hiển thị.
+export async function listMyOrders({ status, page } = {}) {
+  const params = { page }
+  if (status && status !== 'all') params.status = status
+  const { data } = await api.get('/borrow-orders/mine', { params })
+  return data
+}
+
+// 409 kèm `reason`: not_borrowing, overdue, already_extended, pending_return.
+export async function extendBorrowOrder(id) {
+  const { data } = await api.post(`/borrow-orders/${encodeURIComponent(id)}/extend`)
+  return data
+}

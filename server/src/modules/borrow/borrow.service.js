@@ -1,7 +1,10 @@
 const { HttpError } = require('../../lib/httpError');
 const { businessToday, toDateString } = require('../../lib/businessDate');
 const { checkBorrowConditions, countReaderBorrowState } = require('./borrow.conditions');
-const { INELIGIBLE, CONFIRM_BLOCKED, evaluateConfirmEligibility, addDays } = require('./borrow.rules');
+const {
+  INELIGIBLE, CONFIRM_BLOCKED, EXTEND_BLOCKED, EXTENSION_DAYS,
+  evaluateConfirmEligibility, evaluateExtension, displayStatus, addDays, diffDays,
+} = require('./borrow.rules');
 
 const BOOK_GONE = 'Sách không còn tồn tại';
 const ORDER_NOT_FOUND = 'Không tìm thấy đơn mượn';
@@ -10,6 +13,7 @@ const CREATED = 'Đã gửi yêu cầu mượn, chờ nhân viên xác nhận';
 const ALREADY_PROCESSED = 'Đơn đã được xử lý hoặc đã bị hủy, vui lòng tải lại danh sách';
 const CONFIRMED = 'Đã xác nhận đơn mượn';
 const REJECTED = 'Đã từ chối đơn mượn';
+const EXTENDED = `Đã gia hạn thêm ${EXTENSION_DAYS} ngày`;
 const PAGE_SIZE = 10;
 
 // Lỗi nghiệp vụ kèm mã lý do để client hiển thị đúng (vd liên kết tới 2.5.2 khi còn phiếu phạt).
@@ -23,6 +27,45 @@ function confirmBlocked(reason) {
 
 function alreadyProcessed() {
   return Object.assign(new HttpError(409, ALREADY_PROCESSED), { reason: 'already_processed' });
+}
+
+function extendBlocked(reason) {
+  return Object.assign(new HttpError(409, EXTEND_BLOCKED[reason]), { reason });
+}
+
+// 2.3.3: đơn đã hủy không thuộc 5 trạng thái PRD nên không hiện trong lịch sử [Giả định].
+function historyWhere(readerId, status, today) {
+  const todayDate = new Date(today);
+  switch (status) {
+    case 'borrowing': return { readerId, status: 'borrowing', dueDate: { gte: todayDate } };
+    case 'overdue': return { readerId, status: 'borrowing', dueDate: { lt: todayDate } };
+    case 'pending':
+    case 'returned':
+    case 'rejected': return { readerId, status };
+    default: return { readerId, status: { not: 'cancelled' } };
+  }
+}
+
+function toHistoryItem(row, today) {
+  const dueDate = toDateString(row.dueDate);
+  const status = displayStatus({ status: row.status, dueDate }, today);
+  const hasPendingReturn = row.returnRequests.length > 0;
+  const active = row.status === 'borrowing';
+  return {
+    id: row.id,
+    status,
+    book: row.book,
+    requestedDays: row.requestedDays,
+    createdAt: row.createdAt,
+    borrowedAt: row.borrowedAt,
+    dueDate,
+    daysLeft: active ? diffDays(dueDate, today) : null,
+    extensionCount: row.extensionCount,
+    canExtend: active && !evaluateExtension({ ...row, dueDate, hasPendingReturn }, today),
+    hasPendingReturn,
+    returnedAt: row.returnedAt,
+    rejectReason: row.rejectReason,
+  };
 }
 
 function toOrder(row) {
@@ -166,10 +209,70 @@ function createBorrowService({ prisma, now = () => new Date() }) {
     throw alreadyProcessed();
   }
 
-  return { createBorrowOrder, cancelBorrowOrder, listPendingOrders, confirmBorrowOrder, rejectBorrowOrder };
+  // 2.3.3: lịch sử của chính độc giả (edge 1: luôn lọc theo id từ token), mới nhất trước, 10 đơn/trang.
+  async function listMyOrders(readerId, { status = 'all', page = 1 }) {
+    const today = businessToday(now());
+    const where = historyWhere(readerId, status, today);
+    const total = await prisma.borrowOrder.count({ where });
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    const current = Math.min(page, totalPages);
+    const rows = total === 0 ? [] : await prisma.borrowOrder.findMany({
+      where,
+      include: {
+        // Sách đã xóa mềm vẫn hiện tên trong lịch sử.
+        book: { select: { id: true, title: true, author: true } },
+        returnRequests: { where: { status: 'pending' }, select: { id: true }, take: 1 },
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      skip: (current - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    });
+    return {
+      orders: rows.map((row) => toHistoryItem(row, today)),
+      pagination: { page: current, pageSize: PAGE_SIZE, total, totalPages },
+      today,
+    };
+  }
+
+  // 2.3.3 Gia hạn +7 ngày, tối đa 1 lần. Khóa dòng đơn FOR UPDATE: hai lần bấm nhanh (edge 2) xếp hàng,
+  // lần sau thấy extension_count = 1. Tạo yêu cầu trả (2.4.1) phải khóa cùng dòng này trước khi chèn.
+  async function extendBorrowOrder(readerId, id) {
+    const at = now();
+    const today = businessToday(at);
+    const row = await prisma.$transaction(async (tx) => {
+      const [order] = await tx.$queryRaw`
+        SELECT status, due_date AS "dueDate", extension_count AS "extensionCount"
+        FROM borrow_orders WHERE id = ${id} AND reader_id = ${readerId} FOR UPDATE`;
+      // Đơn của người khác cũng là 404 (edge 1).
+      if (!order) throw new HttpError(404, ORDER_NOT_FOUND);
+      const pendingReturns = await tx.returnRequest.count({ where: { borrowOrderId: id, status: 'pending' } });
+      const dueDate = toDateString(order.dueDate);
+      // Edge 3: kiểm tra theo giờ server lúc xử lý, không theo trạng thái client đang thấy.
+      const reason = evaluateExtension({ ...order, dueDate, hasPendingReturn: pendingReturns > 0 }, today);
+      if (reason) throw extendBlocked(reason);
+      return tx.borrowOrder.update({
+        where: { id },
+        data: {
+          dueDate: new Date(addDays(dueDate, EXTENSION_DAYS)),
+          extensionCount: { increment: 1 },
+          extendedAt: at,
+        },
+      });
+    });
+    const dueDate = toDateString(row.dueDate);
+    return {
+      message: EXTENDED,
+      order: { id: row.id, dueDate, extensionCount: row.extensionCount, daysLeft: diffDays(dueDate, today) },
+    };
+  }
+
+  return {
+    createBorrowOrder, cancelBorrowOrder, listPendingOrders, confirmBorrowOrder, rejectBorrowOrder,
+    listMyOrders, extendBorrowOrder,
+  };
 }
 
 module.exports = {
   createBorrowService, BOOK_GONE, ORDER_NOT_FOUND, NOT_CANCELLABLE, CREATED,
-  ALREADY_PROCESSED, CONFIRMED, REJECTED,
+  ALREADY_PROCESSED, CONFIRMED, REJECTED, EXTENDED,
 };

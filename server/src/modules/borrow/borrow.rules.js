@@ -25,4 +25,34 @@ function evaluateBorrowEligibility({ availableQuantity, activeCount, unpaidFineC
     : { canBorrow: true, reason: null, message: null };
 }
 
-module.exports = { MAX_ACTIVE_BORROWS, ACTIVE_STATUSES, INELIGIBLE, evaluateBorrowEligibility };
+// 2.3.2: lý do không xác nhận được; mọi trường hợp vẫn cho từ chối.
+const CONFIRM_BLOCKED = {
+  out_of_stock: 'Sách đã hết, chỉ có thể từ chối đơn này (gợi ý lý do: Hết sách)',
+  reader_inactive: 'Tài khoản độc giả không còn hoạt động, chỉ có thể từ chối đơn này',
+  limit_reached: `Độc giả đã vượt giới hạn mượn tối đa ${MAX_ACTIVE_BORROWS} cuốn, chỉ có thể từ chối đơn này`,
+  unpaid_fine: 'Độc giả còn phiếu phạt chưa thanh toán, chỉ có thể từ chối đơn này',
+  overdue: 'Độc giả đang có sách quá hạn, chỉ có thể từ chối đơn này',
+};
+
+// Thứ tự theo flow 2.3.2: kho (edge 2) → độc giả còn đủ điều kiện (edge 6, giới hạn, phạt).
+// Quá hạn chặn như khi gửi đơn (README điểm 8). activeCount đã gồm chính đơn đang duyệt nên chỉ chặn khi > 5.
+function evaluateConfirmEligibility({ availableQuantity, readerStatus, activeCount, unpaidFineCount, overdueCount }) {
+  if (availableQuantity <= 0) return 'out_of_stock';
+  if (readerStatus !== 'active') return 'reader_inactive';
+  if (activeCount > MAX_ACTIVE_BORROWS) return 'limit_reached';
+  if (unpaidFineCount > 0) return 'unpaid_fine';
+  if (overdueCount > 0) return 'overdue';
+  return null;
+}
+
+// 'YYYY-MM-DD' + n ngày (lịch, không phụ thuộc múi giờ).
+function addDays(dateString, days) {
+  const date = new Date(`${dateString}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+module.exports = {
+  MAX_ACTIVE_BORROWS, ACTIVE_STATUSES, INELIGIBLE, evaluateBorrowEligibility,
+  CONFIRM_BLOCKED, evaluateConfirmEligibility, addDays,
+};

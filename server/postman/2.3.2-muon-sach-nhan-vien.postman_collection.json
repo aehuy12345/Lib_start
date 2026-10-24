@@ -1,0 +1,1573 @@
+{
+  "info": {
+    "name": "Lib_start - 2.3.2 Mượn sách (nhân viên): xác nhận và từ chối",
+    "description": "API test cho 2.3.2 (design/flows/2.3.2-muon-sach-nhan-vien.md). Bản gốc trong repo: server/postman/2.3.2-muon-sach-nhan-vien.postman_collection.json. Chạy `node scripts/seed-test-users.js` trước (thể loại \"Test Duyệt Mượn\": DM 01/02/03 của test.approvee, DM 07 test.fined, DM 08 test.disabled, DM 09 test.overdue, mỗi sách một đơn chờ). Chạy theo thứ tự; cloud Postman không gọi được localhost nên chạy bằng newman.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000/api"
+    },
+    {
+      "key": "password",
+      "value": "Test@1234"
+    }
+  ],
+  "item": [
+    {
+      "name": "Chuẩn bị",
+      "item": [
+        {
+          "name": "reader đăng nhập",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('readerToken', pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"test.reader@example.com\",\"password\":\"{{password}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "librarian đăng nhập",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('librarianToken', pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"test.librarian@example.com\",\"password\":\"{{password}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "admin đăng nhập",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('adminToken', pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"test.admin@example.com\",\"password\":\"{{password}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Danh sách chờ: chỉ đơn pending, cũ nhất trước, 10/trang, lấy id đơn DM",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const { orders, pagination } = pm.response.json();",
+                  "pm.test('phân trang 10/trang', () => { pm.expect(pagination.pageSize).to.eql(10); pm.expect(pagination.page).to.eql(1); pm.expect(orders.length).to.be.at.most(10); });",
+                  "pm.test('cũ nhất trước', () => { const t = orders.map((o) => Date.parse(o.createdAt)); pm.expect(t).to.eql([...t].sort((a, b) => a - b)); });",
+                  "const titles = {\"dm01\":\"Test Sách DM 01 API Xác Nhận\",\"dm02\":\"Test Sách DM 02 API Từ Chối\",\"dm03\":\"Test Sách DM 03 API Hết\",\"dm07\":\"Test Sách DM 07 Phạt\",\"dm08\":\"Test Sách DM 08 Vô Hiệu\",\"dm09\":\"Test Sách DM 09 Quá Hạn\"};",
+                  "for (const [key, title] of Object.entries(titles)) {",
+                  "  const o = orders.find((x) => x.book.title === title);",
+                  "  pm.test(`có đơn ${title}`, () => pm.expect(o).to.be.an('object'));",
+                  "  if (o) { pm.collectionVariables.set(`${key}Order`, o.id); pm.collectionVariables.set(`${key}Book`, o.book.id); }",
+                  "}",
+                  "const dm01 = orders.find((x) => x.book.title === titles.dm01);",
+                  "pm.test('kèm độc giả, sách, SL có sẵn, thời hạn', () => { pm.expect(dm01.reader.email).to.eql('test.approvee@example.com'); pm.expect(dm01.book.availableQuantity).to.eql(2); pm.expect(dm01.requestedDays).to.eql(14); pm.expect(dm01.book.author).to.eql('Tác Giả DM'); });",
+                  "pm.test('DM 03 hiện có sẵn 0 (edge 2)', () => pm.expect(orders.find((x) => x.book.title === titles.dm03).book.availableQuantity).to.eql(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/pending?page=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "pending"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{librarianToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Phân quyền",
+      "item": [
+        {
+          "name": "GET /pending: không token → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/pending",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "pending"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "GET /pending: reader → 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/pending",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "pending"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{readerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /pending: admin → 200, trang sai → 1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('page 1', () => pm.expect(pm.response.json().pagination.page).to.eql(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/pending?page=abc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "pending"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "abc"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "confirm: không token → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/{{dm01Order}}/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "{{dm01Order}}",
+                "confirm"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "confirm: reader → 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/{{dm01Order}}/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "{{dm01Order}}",
+                "confirm"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{readerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "reject: không token → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/{{dm01Order}}/reject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "{{dm01Order}}",
+                "reject"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"reason\":\"x\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "reject: reader → 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/{{dm01Order}}/reject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "{{dm01Order}}",
+                "reject"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{readerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"reason\":\"x\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "confirm: id chữ → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/abc/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "abc",
+                "confirm"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{librarianToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "confirm: đơn không tồn tại → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));",
+                  "pm.test('message', () => pm.expect(pm.response.json().message).to.eql('Không tìm thấy đơn mượn'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/2147483647/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "2147483647",
+                "confirm"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{librarianToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "reject: đơn không tồn tại → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/2147483647/reject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "2147483647",
+                "reject"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{librarianToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"reason\":\"x\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Các lỗi trên không đổi đơn DM 01 (vẫn chờ) và kho (2)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('available 2, borrowed 0', () => { const b = pm.response.json().book ?? pm.response.json(); pm.expect(b.availableQuantity).to.eql(2); pm.expect(b.borrowedQuantity).to.eql(0); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books/{{dm01Book}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books",
+                "{{dm01Book}}"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Xác nhận",
+      "item": [
+        {
+          "name": "Librarian xác nhận DM 01 → 200 Đang mượn, hạn trả = hôm nay (giờ VN) + 14",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const { message, order } = pm.response.json();",
+                  "pm.test('message', () => pm.expect(message).to.eql('Đã xác nhận đơn mượn'));",
+                  "pm.test('status borrowing', () => pm.expect(order.status).to.eql('borrowing'));",
+                  "// Sandbox Postman không có Intl; Việt Nam cố định UTC+7.",
+                  "const today = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);",
+                  "const due = new Date(`${today}T00:00:00Z`); due.setUTCDate(due.getUTCDate() + 14);",
+                  "pm.test('dueDate = hôm nay + 14', () => pm.expect(order.dueDate).to.eql(due.toISOString().slice(0, 10)));",
+                  "pm.test('có borrowedAt', () => pm.expect(order.borrowedAt).to.be.a('string'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/{{dm01Order}}/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "{{dm01Order}}",
+                "confirm"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{librarianToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Kho DM 01: có sẵn 2 → 1, đang mượn 0 → 1; version không đổi",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json().book ?? pm.response.json();",
+                  "pm.test('available 1, borrowed 1, total 2', () => { pm.expect(b.availableQuantity).to.eql(1); pm.expect(b.borrowedQuantity).to.eql(1); pm.expect(b.totalQuantity).to.eql(2); });",
+                  "pm.test('version 1', () => pm.expect(b.version).to.eql(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books/{{dm01Book}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books",
+                "{{dm01Book}}"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Edge 1: xác nhận DM 01 lần nữa → 409 already_processed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('reason = already_processed', () => pm.expect(pm.response.json().reason).to.eql('already_processed'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/{{dm01Order}}/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "{{dm01Order}}",
+                "confirm"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Edge 1: từ chối DM 01 đã xác nhận → 409 already_processed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('reason = already_processed', () => pm.expect(pm.response.json().reason).to.eql('already_processed'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/{{dm01Order}}/reject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "{{dm01Order}}",
+                "reject"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{librarianToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"reason\":\"Muộn\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Kho DM 01 không bị trừ lần hai",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('available 1', () => pm.expect((pm.response.json().book ?? pm.response.json()).availableQuantity).to.eql(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books/{{dm01Book}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books",
+                "{{dm01Book}}"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Lịch sử mượn DM 01 (nhân viên): đơn Đang mượn",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('borrowing', () => pm.expect(pm.response.json().borrows[0].status).to.eql('borrowing'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books/{{dm01Book}}/borrow-history",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books",
+                "{{dm01Book}}",
+                "borrow-history"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{librarianToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Edge 2: xác nhận DM 03 (hết sách) → 409 out_of_stock, gợi ý từ chối",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('reason = out_of_stock', () => pm.expect(pm.response.json().reason).to.eql('out_of_stock'));",
+                  "pm.test('message gợi ý Hết sách', () => pm.expect(pm.response.json().message).to.include('Hết sách'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/{{dm03Order}}/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "{{dm03Order}}",
+                "confirm"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{librarianToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Độc giả còn phiếu phạt (DM 07) → 409 unpaid_fine",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('reason = unpaid_fine', () => pm.expect(pm.response.json().reason).to.eql('unpaid_fine'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/{{dm07Order}}/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "{{dm07Order}}",
+                "confirm"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{librarianToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Edge 6: độc giả bị vô hiệu hóa (DM 08) → 409 reader_inactive",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('reason = reader_inactive', () => pm.expect(pm.response.json().reason).to.eql('reader_inactive'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/{{dm08Order}}/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "{{dm08Order}}",
+                "confirm"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{librarianToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Độc giả có sách quá hạn (DM 09) → 409 overdue",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('reason = overdue', () => pm.expect(pm.response.json().reason).to.eql('overdue'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/{{dm09Order}}/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "{{dm09Order}}",
+                "confirm"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{librarianToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Edge 6: đơn bị chặn vẫn từ chối được (DM 08)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/{{dm08Order}}/reject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "{{dm08Order}}",
+                "reject"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{librarianToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"reason\":\"Tài khoản độc giả đã bị vô hiệu hóa\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Từ chối",
+      "item": [
+        {
+          "name": "Thiếu lý do → 400 errors.reason",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('bắt buộc', () => pm.expect(pm.response.json().errors.reason).to.eql('Lý do từ chối là bắt buộc'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/{{dm02Order}}/reject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "{{dm02Order}}",
+                "reject"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{librarianToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Edge 3: lý do chỉ khoảng trắng → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('bắt buộc', () => pm.expect(pm.response.json().errors.reason).to.eql('Lý do từ chối là bắt buộc'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/{{dm02Order}}/reject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "{{dm02Order}}",
+                "reject"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{librarianToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"reason\":\"    \"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Edge 3: lý do 501 ký tự → 400",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('longReason', 'a'.repeat(501));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('quá dài', () => pm.expect(pm.response.json().errors.reason).to.eql('Lý do từ chối tối đa 500 ký tự'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/{{dm02Order}}/reject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "{{dm02Order}}",
+                "reject"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{librarianToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"reason\":\"{{longReason}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Librarian từ chối DM 02 (lý do được trim) → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('message', () => pm.expect(pm.response.json().message).to.eql('Đã từ chối đơn mượn'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/{{dm02Order}}/reject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "{{dm02Order}}",
+                "reject"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{librarianToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"reason\":\"  Sách đang bảo trì  \"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Edge 1: xác nhận DM 02 đã từ chối → 409 already_processed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('reason = already_processed', () => pm.expect(pm.response.json().reason).to.eql('already_processed'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/{{dm02Order}}/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "{{dm02Order}}",
+                "confirm"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{librarianToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Từ chối không đổi kho DM 02 (vẫn 2)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('available 2', () => pm.expect((pm.response.json().book ?? pm.response.json()).availableQuantity).to.eql(2));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books/{{dm02Book}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books",
+                "{{dm02Book}}"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Lịch sử DM 02: đơn Bị từ chối",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('rejected', () => pm.expect(pm.response.json().borrows[0].status).to.eql('rejected'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books/{{dm02Book}}/borrow-history",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books",
+                "{{dm02Book}}",
+                "borrow-history"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{librarianToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Edge 2: Admin từ chối DM 03 với lý do \"Hết sách\" → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/{{dm03Order}}/reject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "{{dm03Order}}",
+                "reject"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"reason\":\"Hết sách\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Danh sách chờ không còn DM 01, 02, 03, 08; còn DM 07, 09",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const ids = pm.response.json().orders.map((o) => o.id);",
+                  "for (const k of ['dm01', 'dm02', 'dm03', 'dm08']) pm.test(`không còn ${k}`, () => pm.expect(ids).to.not.include(Number(pm.collectionVariables.get(`${k}Order`))));",
+                  "for (const k of ['dm07', 'dm09']) pm.test(`còn ${k}`, () => pm.expect(ids).to.include(Number(pm.collectionVariables.get(`${k}Order`))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/borrow-orders/pending",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "borrow-orders",
+                "pending"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{librarianToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

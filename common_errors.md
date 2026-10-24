@@ -4,9 +4,9 @@ Tóm tắt các lỗi đã gặp trong quá trình làm và cách sửa. Nhóm t
 
 ## Môi trường Windows / shell
 
-- **Không có Python** (2.1.2): `python` trên máy chỉ là alias mở Microsoft Store. → Dùng script Node (`node script.js`) để sửa file hàng loạt.
+- **Không có Python** (2.1.2, lặp lại 2.3.2): `python` trên máy chỉ là alias mở Microsoft Store (exit 49). → Dùng script Node (`node script.js`) hoặc Edit để sửa file; không thử `python` nữa.
 - **File trong repo dùng CRLF** (2.1.2): tìm-thay chuỗi nhiều dòng (dùng `\n`) không khớp. → Đổi về LF trước khi thay rồi ghi lại đúng kiểu xuống dòng cũ, hoặc dùng công cụ Edit/Write.
-- **Heredoc dài trong Git Bash bị lỗi cú pháp** (2.1.2): `unexpected EOF while looking for matching '`, gặp khi nội dung có nhiều backtick/nháy. → Tạo file bằng công cụ Write thay vì `cat <<'EOF'`.
+- **Heredoc dài trong Git Bash bị lỗi cú pháp** (2.1.2, lặp lại 2.3.2 khi tạo file test): `unexpected EOF while looking for matching '`, gặp khi nội dung có nhiều backtick/nháy. → Tạo file bằng công cụ Write thay vì `cat <<'EOF'`; heredoc chỉ dùng cho đoạn ngắn không có backtick.
 - **Template literal JS trong `node -e "..."` bị Git Bash thực thi** (2.2.5): backtick và `${...}` trong chuỗi nháy kép bị bash coi là command substitution, đoạn code chèn vào file bị mất. → Đoạn code có backtick thì sửa bằng Edit/Write, không chèn qua `node -e`.
 - **Escape trong `sed` hỏng script JS** (2.1.2): `\\r\\n` qua `sed` biến thành ký tự xuống dòng thật. → Không dùng `sed` để chèn chuỗi có escape; viết lại file bằng Write hoặc heredoc.
 - **Lệnh Bash treo tới hết 120s** (2.2.2): một `cat > file` thừa ở đầu chuỗi lệnh chờ stdin mãi, các lệnh sau không chạy. → Không để `cat` không có input trong chuỗi lệnh; sửa file bằng Edit/Write.
@@ -55,3 +55,4 @@ Tóm tắt các lỗi đã gặp trong quá trình làm và cách sửa. Nhóm t
 - **Playwright MCP không lưu được screenshot vào scratchpad** (2.2.5): `File access denied ... outside allowed roots`; chỉ được ghi trong repo và `.playwright-mcp/`. → Bỏ `filename` (mặc định lưu vào `.playwright-mcp/`, đã gitignore).
 - **Trình duyệt của Playwright MCP còn phiên đăng nhập cũ** (2.2.5): localStorage giữ token từ lần trước nên trang `/login` không hiện form, điền `#email` báo không tìm thấy. → Chụp `browser_snapshot` trước khi thao tác; đã đăng nhập thì vào thẳng trang cần test (nhớ kiểm tra đúng vai trò).
 - **Postman MCP `getCollections` treo tới khi hết thời gian chờ (300s)** (2.1.2): lệnh đọc không trả kết quả, nhưng `createCollection` vẫn chạy bình thường. → Không chờ lệnh đọc; tạo collection trực tiếp theo workspace ID (`getWorkspaces`). Chạy test API bằng `npx -y newman@6.2.3 run <file>` (cloud của Postman không gọi được localhost).
+- **Script test Postman báo `ReferenceError: Intl is not defined`** (2.3.2): sandbox của Postman/newman không có `Intl`, nên không tính được ngày theo `Asia/Ho_Chi_Minh` bằng `Intl.DateTimeFormat`. → Việt Nam cố định UTC+7: `new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10)`.

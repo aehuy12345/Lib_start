@@ -82,6 +82,17 @@ const listBooksQuerySchema = Joi.object({
   page: Joi.number().integer().min(1).max(INT32_MAX).default(1).failover(1),
 });
 
+// PRD 2.2.4 edge 1: id không phải số nguyên dương (chữ, âm, 0) xử lý như sách không tồn tại.
+function parseBookId(raw) {
+  return /^[1-9]\d{0,9}$/.test(raw) && Number(raw) <= INT32_MAX ? Number(raw) : null;
+}
+
+// 2.2.4 edge 6: lịch sử mượn phân trang; page sai → 1 như 2.2.3.
+const borrowHistoryQuerySchema = Joi.object({
+  page: Joi.number().integer().min(1).max(INT32_MAX).default(1).failover(1),
+});
+
 module.exports = {
-  createBookSchema, listBooksQuerySchema, INVALID_ISBN, INVALID_CATEGORY, SEARCH_MAX,
+  createBookSchema, listBooksQuerySchema, borrowHistoryQuerySchema, parseBookId,
+  INVALID_ISBN, INVALID_CATEGORY, SEARCH_MAX,
 };

@@ -14,3 +14,21 @@ export async function listBooks(params) {
   const { data } = await api.get('/books', { params })
   return data
 }
+
+// 2.2.4: chi tiết sách, công khai.
+export async function getBook(id) {
+  const { data } = await api.get(`/books/${encodeURIComponent(id)}`)
+  return data.book
+}
+
+// 2.2.4: lịch sử mượn, chỉ nhân viên (server trả 401/403 cho người khác).
+export async function getBorrowHistory(id, page) {
+  const { data } = await api.get(`/books/${encodeURIComponent(id)}/borrow-history`, { params: { page } })
+  return data
+}
+
+// 2.2.4: độc giả có mượn được sách này không; server kiểm tra lại khi tạo đơn (2.3.1).
+export async function getBorrowEligibility(id) {
+  const { data } = await api.get(`/books/${encodeURIComponent(id)}/borrow-eligibility`)
+  return data
+}

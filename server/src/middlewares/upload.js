@@ -5,10 +5,11 @@ const MAX_IMAGE_BYTES = 2 * 1024 * 1024; // PRD: ảnh tối đa 2 MB
 const INVALID_IMAGE = 'Chỉ nhận ảnh JPG, PNG, WebP tối đa 2 MB';
 
 // Nhận một file ảnh (multipart) vào bộ nhớ; kiểm tra định dạng thật làm ở service theo magic bytes.
-function uploadImage(field) {
+// maxFields > 0 khi form gửi kèm dữ liệu văn bản (vd thêm sách 2.2.2); các field đó vào req.body.
+function uploadImage(field, { maxFields = 0 } = {}) {
   const handler = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: MAX_IMAGE_BYTES, files: 1, fields: 0 },
+    limits: { fileSize: MAX_IMAGE_BYTES, files: 1, fields: maxFields },
   }).single(field);
 
   return (req, res, next) => {

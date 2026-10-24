@@ -4,6 +4,7 @@ function errorHandler(err, req, res, next) {
   if (err.name === 'HttpError') {
     const body = { message: err.message };
     if (err.errors) body.errors = err.errors;
+    if (err.reason) body.reason = err.reason;
     return res.status(err.status).json(body);
   }
   if (err.type === 'entity.parse.failed') {

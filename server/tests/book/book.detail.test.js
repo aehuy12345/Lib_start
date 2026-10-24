@@ -35,11 +35,11 @@ function makeService({ book = BOOK_ROW, counts = {}, orders = [], total = orders
     borrowOrder: {
       count: vi.fn(async ({ where }) => {
         if (where.dueDate) return counts.overdue ?? 0;
-        if (where.bookId && where.readerId) return counts.sameBook ?? 0;
         if (where.readerId) return counts.active ?? 0;
         return total;
       }),
       findMany: vi.fn(async () => orders),
+      findFirst: vi.fn(async () => (counts.sameBook ? { id: 9, status: 'pending' } : null)),
     },
     fineTicket: { count: vi.fn(async () => counts.fines ?? 0) },
   };
@@ -128,7 +128,8 @@ describe('bookService.listBorrowHistory (2.2.4)', () => {
 describe('bookService.getBorrowEligibility (2.2.4)', () => {
   it('đủ điều kiện', async () => {
     const { service } = makeService({ counts: { active: 4 } });
-    expect(await service.getBorrowEligibility(7, 1)).toEqual({ canBorrow: true, reason: null, message: null });
+    expect(await service.getBorrowEligibility(7, 1))
+      .toEqual({ canBorrow: true, reason: null, message: null, activeOrder: null });
   });
 
   it('đếm đơn chờ + đang mượn, đơn cùng sách, phiếu phạt chưa paid, đơn quá hạn theo ngày VN', async () => {
@@ -136,7 +137,9 @@ describe('bookService.getBorrowEligibility (2.2.4)', () => {
     await service.getBorrowEligibility(7, 1);
     const wheres = prisma.borrowOrder.count.mock.calls.map(([arg]) => arg.where);
     expect(wheres).toContainEqual({ readerId: 1, status: { in: ['pending', 'borrowing'] } });
-    expect(wheres).toContainEqual({ readerId: 1, status: { in: ['pending', 'borrowing'] }, bookId: 7 });
+    expect(prisma.borrowOrder.findFirst).toHaveBeenCalledWith({
+      where: { readerId: 1, status: { in: ['pending', 'borrowing'] }, bookId: 7 }, select: { id: true, status: true },
+    });
     expect(wheres).toContainEqual({ readerId: 1, status: 'borrowing', dueDate: { lt: new Date('2026-10-25T00:00:00Z') } });
     expect(prisma.fineTicket.count).toHaveBeenCalledWith({ where: { readerId: 1, status: { not: 'paid' } } });
   });
@@ -150,6 +153,11 @@ describe('bookService.getBorrowEligibility (2.2.4)', () => {
   ])('%s', async (reason, opts) => {
     const { service } = makeService(opts);
     expect(await service.getBorrowEligibility(7, 1)).toMatchObject({ canBorrow: false, reason });
+  });
+
+  it('2.3.1: có đơn chờ cùng sách → trả activeOrder để hiện nút Hủy yêu cầu', async () => {
+    const { service } = makeService({ counts: { sameBook: 1, active: 1 } });
+    expect((await service.getBorrowEligibility(7, 1)).activeOrder).toEqual({ id: 9, status: 'pending' });
   });
 
   it('edge 2: sách đã bị xóa → 404', async () => {

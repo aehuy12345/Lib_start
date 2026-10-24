@@ -5,17 +5,24 @@ import { useAuth } from '../features/auth/AuthContext'
 import { dashboardPath } from '../features/auth/session'
 import { deleteBook, getBook, getBorrowEligibility, getBorrowHistory, getDeleteCheck } from '../features/book/bookApi'
 import BookCover from '../features/book/BookCover'
+import { cancelBorrowOrder } from '../features/borrow/borrowApi'
+import BorrowForm from '../features/borrow/BorrowForm'
 import Pagination from '../features/book/Pagination'
 import { BORROW_STATUS_LABELS, borrowButtonState, formatDate, isStaff } from '../features/book/bookDetail'
 
 const BUTTON_CLASS = 'rounded-md px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50'
 
-function BorrowAction({ book, eligibility }) {
+// 2.3.1: onChanged() tải lại điều kiện mượn sau khi gửi/hủy yêu cầu hoặc khi server từ chối.
+function BorrowAction({ book, eligibility, onChanged }) {
   const { status, user } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const [notice, setNotice] = useState(null)
+  const [formOpen, setFormOpen] = useState(false)
+  const [notice, setNotice] = useState('')
+  const [error, setError] = useState('')
+  const [cancelling, setCancelling] = useState(false)
   const state = borrowButtonState({ authStatus: status, role: user?.role, eligibility })
+  const pendingOrder = eligibility?.activeOrder?.status === 'pending' ? eligibility.activeOrder : null
 
   if (state.kind === 'hidden') return null
 
@@ -25,8 +32,38 @@ function BorrowAction({ book, eligibility }) {
       navigate(`/login?redirect=${encodeURIComponent(location.pathname)}`)
       return
     }
-    // TODO 2.3.1: mở form chọn thời hạn và gửi yêu cầu mượn.
-    setNotice(`Chức năng gửi yêu cầu mượn "${book.title}" đang được phát triển`)
+    setNotice('')
+    setError('')
+    setFormOpen(true)
+  }
+
+  // Gửi xong hoặc bị server từ chối (điều kiện đã đổi từ lúc mở trang): đóng form, tải lại điều kiện.
+  const onDone = (message) => {
+    setFormOpen(false)
+    setNotice(message)
+    onChanged()
+  }
+  const onRejected = (message) => {
+    setFormOpen(false)
+    setError(message)
+    onChanged()
+  }
+
+  const onCancelOrder = async () => {
+    if (!window.confirm(`Hủy yêu cầu mượn "${book.title}"?`)) return
+    setError('')
+    setNotice('')
+    setCancelling(true)
+    try {
+      const data = await cancelBorrowOrder(pendingOrder.id)
+      setNotice(data.message)
+    } catch (err) {
+      // 409: nhân viên vừa xử lý đơn; tải lại để thấy trạng thái mới.
+      setError(parseApiError(err).message)
+    } finally {
+      setCancelling(false)
+      onChanged()
+    }
   }
 
   return (
@@ -34,7 +71,7 @@ function BorrowAction({ book, eligibility }) {
       <button
         type="button"
         onClick={onClick}
-        disabled={state.kind === 'disabled' || state.kind === 'checking'}
+        disabled={state.kind === 'disabled' || state.kind === 'checking' || formOpen}
         aria-describedby={state.message ? 'borrow-blocked' : undefined}
         className={`${BUTTON_CLASS} bg-blue-600 text-white hover:bg-blue-700`}
       >
@@ -42,7 +79,21 @@ function BorrowAction({ book, eligibility }) {
       </button>
       {state.kind === 'login' && <p className="mt-2 text-xs text-slate-500">Bạn cần đăng nhập để mượn sách</p>}
       {state.message && <p id="borrow-blocked" className="mt-2 text-sm text-red-700">{state.message}</p>}
-      {notice && <p role="status" className="mt-2 text-sm text-slate-600">{notice}</p>}
+      {pendingOrder && (
+        <button
+          type="button"
+          onClick={onCancelOrder}
+          disabled={cancelling}
+          className={`${BUTTON_CLASS} mt-2 border border-slate-300 bg-white text-slate-700 hover:bg-slate-50`}
+        >
+          Hủy yêu cầu mượn
+        </button>
+      )}
+      {error && error !== state.message && <p role="alert" className="mt-2 text-sm text-red-700">{error}</p>}
+      {formOpen && state.kind === 'enabled' && (
+        <BorrowForm bookId={book.id} onDone={onDone} onRejected={onRejected} onCancel={() => setFormOpen(false)} />
+      )}
+      {notice && <p role="status" className="mt-2 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">{notice}</p>}
     </div>
   )
 }
@@ -166,6 +217,7 @@ export default function BookDetailPage() {
   const [error, setError] = useState(null) // { message, notFound }
   const [eligibility, setEligibility] = useState(undefined)
   const [reloadKey, setReloadKey] = useState(0)
+  const [eligibilityKey, setEligibilityKey] = useState(0)
   const isReader = status === 'authenticated' && user.role === 'reader'
   const staff = status === 'authenticated' && isStaff(user.role)
   // 2.2.5: thông báo sau khi lưu ở trang sửa.
@@ -203,7 +255,7 @@ export default function BookDetailPage() {
         setEligibility({ error: message })
       })
     return () => { ignore = true }
-  }, [isReader, book])
+  }, [isReader, book, eligibilityKey])
 
   return (
     <main className="min-h-screen bg-slate-50">
@@ -270,7 +322,7 @@ export default function BookDetailPage() {
                 </dl>
                 <h2 className="mt-4 text-sm font-semibold text-slate-900">Mô tả</h2>
                 <p className="mt-1 whitespace-pre-line break-words text-sm text-slate-700">{book.description}</p>
-                <BorrowAction book={book} eligibility={eligibility} />
+                <BorrowAction book={book} eligibility={eligibility} onChanged={() => setEligibilityKey((k) => k + 1)} />
                 {staff && <StaffActions book={book} role={user.role} listSearch={listSearch} backTo={backTo} />}
               </div>
             </article>

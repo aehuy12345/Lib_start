@@ -22,6 +22,8 @@ const USERS = [
   { email: 'test.borrower@example.com', name: 'Test Borrower', role: 'reader', status: 'active' },
   { email: 'test.fined@example.com', name: 'Test Fined', role: 'reader', status: 'active' },
   { email: 'test.overdue@example.com', name: 'Test Overdue', role: 'reader', status: 'active' },
+  // 2.3.1: độc giả gửi yêu cầu mượn trong API/E2E test (xem seedBorrowRequest).
+  { email: 'test.requester@example.com', name: 'Test Requester', role: 'reader', status: 'active' },
 ];
 
 async function main() {
@@ -43,6 +45,7 @@ async function main() {
   await seedBookList(prisma);
   await seedBookDetail(prisma);
   await seedBookEdit(prisma);
+  await seedBorrowRequest(prisma);
   await prisma.$disconnect();
 }
 
@@ -278,6 +281,41 @@ async function seedBookEdit(prisma) {
   ];
   for (const data of orders) await prisma.borrowOrder.create({ data });
   console.log(`category  "${CATEGORY_EDIT}" (id ${category.id}): SX 01 id ${edit.id}, SX 02..05 cho 2.2.5`);
+}
+
+// 2.3.1: thể loại "Test Mượn Sách", test.requester chưa có đơn hoạt động nào.
+//   MS 01 API    → Postman gửi yêu cầu, gửi trùng, hủy, mượn lại sau khi hủy
+//   MS 02 E2E    → E2E gửi yêu cầu rồi hủy
+//   MS 03 Hết    → hết sách (available 0)
+//   MS 04 Mượn Lại → test.requester từng có đơn đã trả và bị từ chối, vẫn mượn lại được (edge 5)
+// Chặn theo lý do khác dùng test.borrower (5 đơn), test.fined (phiếu phạt), test.overdue (quá hạn).
+const CATEGORY_BORROW = 'Test Mượn Sách';
+
+async function seedBorrowRequest(prisma) {
+  const requester = await prisma.user.findUnique({ where: { email: 'test.requester@example.com' }, select: { id: true } });
+  const librarian = await prisma.user.findUnique({ where: { email: 'test.librarian@example.com' }, select: { id: true } });
+  const category = await prisma.category.findFirst({ where: { name: CATEGORY_BORROW, deletedAt: null } })
+    ?? await prisma.category.create({ data: { name: CATEGORY_BORROW } });
+  const base = { author: 'Tác Giả MS', publishYear: 2019, description: 'Dữ liệu test 2.3.1', categoryId: category.id };
+  const book = (title, stock) => prisma.book.create({ data: { ...base, title, ...stock } });
+
+  const api = await book('Test Sách MS 01 API', { totalQuantity: 3, availableQuantity: 3 });
+  const e2e = await book('Test Sách MS 02 E2E', { totalQuantity: 2, availableQuantity: 2 });
+  const out = await book('Test Sách MS 03 Hết', { totalQuantity: 1, availableQuantity: 0, damagedQuantity: 1 });
+  const again = await book('Test Sách MS 04 Mượn Lại', { totalQuantity: 1, availableQuantity: 1, borrowCount: 1 });
+
+  const at = (daysAgo) => new Date(Date.now() - daysAgo * DAY);
+  const processed = { readerId: requester.id, bookId: again.id, processedById: librarian.id };
+  await prisma.borrowOrder.create({
+    data: {
+      ...processed, status: 'returned', processedAt: at(30), createdAt: at(31),
+      borrowedAt: at(30), dueDate: businessDate(-16), returnedAt: at(20),
+    },
+  });
+  await prisma.borrowOrder.create({
+    data: { ...processed, status: 'rejected', processedAt: at(10), createdAt: at(11), rejectReason: 'Dữ liệu test: từ chối' },
+  });
+  console.log(`category  "${CATEGORY_BORROW}" (id ${category.id}): MS 01 id ${api.id}, MS 02 id ${e2e.id}, MS 03 id ${out.id}, MS 04 id ${again.id} cho 2.3.1`);
 }
 
 main().catch((err) => {

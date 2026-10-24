@@ -4,7 +4,8 @@ const { HttpError } = require('../../lib/httpError');
 const { detectImageType } = require('../../lib/imageType');
 const { MAX_IMAGE_BYTES, INVALID_IMAGE } = require('../../middlewares/upload');
 const { businessToday, toDateString } = require('../../lib/businessDate');
-const { ACTIVE_STATUSES, evaluateBorrowEligibility } = require('../borrow/borrow.rules');
+const { ACTIVE_STATUSES } = require('../borrow/borrow.rules');
+const { checkBorrowConditions } = require('../borrow/borrow.conditions');
 
 const COVER_BUCKET = 'book-covers';
 const BOOK_NOT_FOUND = 'Không tìm thấy sách';
@@ -251,24 +252,10 @@ function createBookService({
   }
 
   // 2.2.4: độc giả có mượn được sách này không (khóa nút Mượn kèm lý do).
+  // activeOrder (đơn chờ/đang mượn sách này) để hiện nút Hủy yêu cầu (2.3.1).
   async function getBorrowEligibility(id, readerId) {
     const book = await findActiveBook(id, { select: { availableQuantity: true } });
-    const active = { readerId, status: { in: ACTIVE_STATUSES } };
-    const [activeCount, sameBookCount, unpaidFineCount, overdueCount] = await Promise.all([
-      prisma.borrowOrder.count({ where: active }),
-      prisma.borrowOrder.count({ where: { ...active, bookId: id } }),
-      prisma.fineTicket.count({ where: { readerId, status: { not: 'paid' } } }),
-      prisma.borrowOrder.count({
-        where: { readerId, status: 'borrowing', dueDate: { lt: new Date(businessToday(now())) } },
-      }),
-    ]);
-    return evaluateBorrowEligibility({
-      availableQuantity: book.availableQuantity,
-      activeCount,
-      unpaidFineCount,
-      overdueCount,
-      hasActiveOrderForBook: sameBookCount > 0,
-    });
+    return checkBorrowConditions(prisma, { readerId, bookId: id, availableQuantity: book.availableQuantity, now: now() });
   }
 
   // Edge 5: version khác lúc mở form → xung đột. Edge 2: tổng mới được bằng đúng số bản không có sẵn.

@@ -6,6 +6,7 @@ import BookDetailPage from './pages/BookDetailPage'
 import BooksPage from './pages/BooksPage'
 import CategoriesPage from './pages/CategoriesPage'
 import DashboardPage from './pages/DashboardPage'
+import EditBookPage from './pages/EditBookPage'
 import LoginPage from './pages/LoginPage'
 import ProfilePage from './pages/ProfilePage'
 import RegisterPage from './pages/RegisterPage'
@@ -27,6 +28,8 @@ function App() {
           <Route path="/admin/categories" element={<RequireAuth roles={['admin']}><CategoriesPage /></RequireAuth>} />
           <Route path="/librarian/books/new" element={<RequireAuth roles={['librarian']}><AddBookPage /></RequireAuth>} />
           <Route path="/admin/books/new" element={<RequireAuth roles={['admin']}><AddBookPage /></RequireAuth>} />
+          <Route path="/librarian/books/:id/edit" element={<RequireAuth roles={['librarian']}><EditBookPage /></RequireAuth>} />
+          <Route path="/admin/books/:id/edit" element={<RequireAuth roles={['admin']}><EditBookPage /></RequireAuth>} />
           {/* 2.2.3: danh sách sách công khai là trang chủ. */}
           <Route path="/" element={<Navigate to="/books" replace />} />
           <Route path="/books" element={<BooksPage />} />

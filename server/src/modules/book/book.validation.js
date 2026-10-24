@@ -61,6 +61,14 @@ const createBookSchema = Joi.object({
   quantity,
 });
 
+// PRD 2.2.5: như 2.2.2, quantity là tổng số lượng mới. version cho khóa lạc quan (edge 5);
+// removeCover xóa ảnh hiện tại, bị bỏ qua nếu có gửi ảnh mới (ảnh mới thay ảnh cũ).
+const updateBookSchema = createBookSchema.keys({
+  version: Joi.number().integer().min(1).max(INT32_MAX).required()
+    .messages({ '*': 'Thiếu phiên bản dữ liệu, vui lòng tải lại trang' }),
+  removeCover: Joi.boolean().default(false).messages({ '*': 'Giá trị xóa ảnh bìa không hợp lệ' }),
+});
+
 const SORTS = ['name', 'newest', 'popular'];
 const SEARCH_MAX = 100;
 const INVALID_CATEGORY = 'Thể loại không hợp lệ';
@@ -93,6 +101,6 @@ const borrowHistoryQuerySchema = Joi.object({
 });
 
 module.exports = {
-  createBookSchema, listBooksQuerySchema, borrowHistoryQuerySchema, parseBookId,
+  createBookSchema, updateBookSchema, listBooksQuerySchema, borrowHistoryQuerySchema, parseBookId,
   INVALID_ISBN, INVALID_CATEGORY, SEARCH_MAX,
 };

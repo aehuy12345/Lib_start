@@ -42,6 +42,7 @@ async function main() {
   await seedCategories(prisma);
   await seedBookList(prisma);
   await seedBookDetail(prisma);
+  await seedBookEdit(prisma);
   await prisma.$disconnect();
 }
 
@@ -228,6 +229,55 @@ async function seedBookDetail(prisma) {
     },
   });
   console.log(`category  "${CATEGORY_DETAIL}" (id ${category.id}): "${DETAIL_BOOK}" id ${book.id} có ${orders.length} đơn mượn cho 2.2.4`);
+}
+
+// 2.2.5: thể loại "Test Sửa Xóa".
+//   SX 01 Sửa       → tổng 6 = 3 sẵn + 2 đang mượn + 1 hư hỏng (tổng tối thiểu 3)
+//   SX 02 Đang Mượn → 1 đơn đang mượn của test.overdue, chặn xóa
+//   SX 03 Chờ Duyệt → 1 đơn chờ xác nhận của test.reader, chặn xóa (edge 3)
+//   SX 04, SX 05    → chỉ có đơn đã trả (edge 1), xóa được: SX 04 cho API test, SX 05 cho E2E
+// Sách bị xóa mềm vẫn bắt đầu bằng "Test Sách " nên cleanTestBooks dọn được.
+const CATEGORY_EDIT = 'Test Sửa Xóa';
+
+async function seedBookEdit(prisma) {
+  const users = Object.fromEntries((await prisma.user.findMany({
+    where: { email: { in: USERS.map((u) => u.email) } },
+    select: { id: true, email: true },
+  })).map((u) => [u.email.split('@')[0].replace('test.', ''), u.id]));
+  const category = await prisma.category.findFirst({ where: { name: CATEGORY_EDIT, deletedAt: null } })
+    ?? await prisma.category.create({ data: { name: CATEGORY_EDIT } });
+  const base = { author: 'Tác Giả SX', publishYear: 2018, description: 'Dữ liệu test 2.2.5', categoryId: category.id };
+  const book = (title, stock, extra = {}) => prisma.book.create({ data: { ...base, title, ...stock, ...extra } });
+
+  const now = Date.now();
+  const at = (daysAgo) => new Date(now - daysAgo * DAY);
+  const borrowing = (readerId) => ({
+    readerId, status: 'borrowing', processedById: users.librarian, processedAt: at(1), createdAt: at(2),
+    borrowedAt: at(1), dueDate: businessDate(13),
+  });
+  const returned = (readerId) => ({
+    readerId, status: 'returned', processedById: users.librarian, processedAt: at(30), createdAt: at(31),
+    borrowedAt: at(30), dueDate: businessDate(-16), returnedAt: at(20),
+  });
+
+  const edit = await book('Test Sách SX 01 Sửa',
+    { totalQuantity: 6, availableQuantity: 3, borrowedQuantity: 2, damagedQuantity: 1 }, { isbn: '9780131103627' });
+  const borrowed = await book('Test Sách SX 02 Đang Mượn', { totalQuantity: 2, availableQuantity: 1, borrowedQuantity: 1 });
+  const pending = await book('Test Sách SX 03 Chờ Duyệt', { totalQuantity: 2, availableQuantity: 2 });
+  const deletable = [];
+  for (const title of ['Test Sách SX 04 Xóa API', 'Test Sách SX 05 Xóa E2E']) {
+    deletable.push(await book(title, { totalQuantity: 1, availableQuantity: 1 }, { borrowCount: 1 }));
+  }
+
+  const orders = [
+    { ...borrowing(users.borrower), bookId: edit.id },
+    { ...borrowing(users.overdue), bookId: edit.id },
+    { ...borrowing(users.overdue), bookId: borrowed.id },
+    { readerId: users.reader, status: 'pending', bookId: pending.id },
+    ...deletable.map((b) => ({ ...returned(users.fined), bookId: b.id })),
+  ];
+  for (const data of orders) await prisma.borrowOrder.create({ data });
+  console.log(`category  "${CATEGORY_EDIT}" (id ${category.id}): SX 01 id ${edit.id}, SX 02..05 cho 2.2.5`);
 }
 
 main().catch((err) => {

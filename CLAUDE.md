@@ -41,6 +41,7 @@ Phases run in order; do not start a phase before the previous one is signed off 
   1. **Unit tests** — cover the business rules and edge cases from the feature's flow file in `design/flows/`.
   2. **API tests** — via the **Postman MCP**: a collection per feature covering happy case, validation errors and permission (role) checks for each endpoint.
   3. **E2E tests** — via the **Playwright MCP**: run the feature's user flows end to end in the browser.
+- **Mark it done in the PRD.** Once a feature passes all three test layers, set its `Trạng thái` cell in the PRD Part 3 dependency table (`PRD.md`) from `⬜ Chưa làm` to `✅ Hoàn thành`. This is the only `PRD.md` edit allowed without asking the user first.
 - Postman MCP (`https://mcp.postman.com/mcp`, OAuth login) and Playwright MCP (`npx @playwright/mcp@latest`) are registered in `.mcp.json`.
 
 Conventions for design docs: write in Vietnamese like the PRD, reference feature codes from PRD (2.x.x), mark anything not stated in the PRD as `[Giả định]` or `[Cần làm rõ]` instead of silently deciding. If a flow reveals a PRD gap, record it in the flow file and in the README open-questions list; do not edit `PRD.md` without the user's approval.

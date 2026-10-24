@@ -11,6 +11,7 @@ const BOOK_NOT_FOUND = 'Không tìm thấy sách';
 const ISBN_TAKEN = 'ISBN đã tồn tại. Nếu là cùng đầu sách, hãy cập nhật số lượng ở sách đã có';
 const CATEGORY_GONE = 'Thể loại không tồn tại hoặc đã bị xóa, vui lòng chọn lại';
 const DUPLICATE_TITLE = 'Lưu ý: đã có sách cùng tên và tác giả';
+const VERSION_CONFLICT = 'Sách đã được người khác cập nhật. Vui lòng tải lại trang để xem dữ liệu mới';
 const PAGE_SIZE = 10;
 
 // Edge 6: luôn có id làm tiêu chí phụ để hai sách bằng nhau không đổi chỗ giữa các trang.
@@ -49,6 +50,8 @@ function createBookService({
       totalQuantity: row.totalQuantity,
       availableQuantity: row.availableQuantity,
       borrowedQuantity: row.borrowedQuantity,
+      damagedQuantity: row.damagedQuantity,
+      version: row.version,
       createdAt: row.createdAt,
     };
   }
@@ -73,10 +76,14 @@ function createBookService({
 
   // Edge 9: kiểm tra trước những gì kiểm được để không upload ảnh rồi mới báo lỗi.
   // Hai kiểm tra này không thay cho ràng buộc DB: race vẫn được chặn khi insert.
-  async function precheck({ isbn, categoryId }) {
+  // excludeId: khi sửa (2.2.5), ISBN của chính sách đó không tính là trùng.
+  async function precheck({ isbn, categoryId }, excludeId) {
     const [category, sameIsbn] = await Promise.all([
       prisma.category.findFirst({ where: { id: categoryId, deletedAt: null }, select: { id: true } }),
-      isbn ? prisma.book.findFirst({ where: { isbn, deletedAt: null }, select: { id: true } }) : null,
+      isbn ? prisma.book.findFirst({
+        where: { isbn, deletedAt: null, ...(excludeId && { id: { not: excludeId } }) },
+        select: { id: true },
+      }) : null,
     ]);
     if (sameIsbn) throw new HttpError(409, ISBN_TAKEN, { isbn: ISBN_TAKEN });
     if (!category) throw new HttpError(400, CATEGORY_GONE, { categoryId: CATEGORY_GONE });
@@ -95,6 +102,26 @@ function createBookService({
     return count > 0 ? DUPLICATE_TITLE : null;
   }
 
+  async function uploadCover(file, coverType) {
+    if (!coverType) return null;
+    const path = `${newId()}.${coverType.ext}`;
+    try {
+      await storage.upload(COVER_BUCKET, path, file.buffer, coverType.mime);
+    } catch (err) {
+      logger.error('Upload ảnh bìa thất bại', err);
+      throw new HttpError(502, 'Không tải được ảnh bìa, vui lòng thử lại', { cover: 'Không tải được ảnh bìa' });
+    }
+    return path;
+  }
+
+  // FOR SHARE cùng dòng mà xóa thể loại (2.2.1) khóa FOR UPDATE: thể loại không thể bị xóa
+  // giữa lúc kiểm tra và ghi sách, và lệnh xóa đang chờ sẽ đếm được sách này (2.2.2 edge 7, 2.2.5 edge 4).
+  async function lockCategory(tx, categoryId) {
+    const locked = await tx.$queryRaw`
+      SELECT id FROM categories WHERE id = ${categoryId} AND deleted_at IS NULL FOR SHARE`;
+    if (locked.length === 0) throw new HttpError(400, CATEGORY_GONE, { categoryId: CATEGORY_GONE });
+  }
+
   // Input đã qua Joi. Sách mới "Có sẵn": available = số lượng, borrowed = 0.
   async function createBook(input, file) {
     const coverType = checkCover(file);
@@ -110,25 +137,12 @@ function createBookService({
     };
     await precheck(data);
 
-    let coverPath = null;
-    if (coverType) {
-      coverPath = `${newId()}.${coverType.ext}`;
-      try {
-        await storage.upload(COVER_BUCKET, coverPath, file.buffer, coverType.mime);
-      } catch (err) {
-        logger.error('Upload ảnh bìa thất bại', err);
-        throw new HttpError(502, 'Không tải được ảnh bìa, vui lòng thử lại', { cover: 'Không tải được ảnh bìa' });
-      }
-    }
+    const coverPath = await uploadCover(file, coverType);
 
     let row;
     try {
       row = await prisma.$transaction(async (tx) => {
-        // FOR SHARE cùng dòng mà xóa thể loại (2.2.1) khóa FOR UPDATE: thể loại không thể bị xóa
-        // giữa lúc kiểm tra và insert, và lệnh xóa đang chờ sẽ đếm được sách này (edge 7).
-        const locked = await tx.$queryRaw`
-          SELECT id FROM categories WHERE id = ${data.categoryId} AND deleted_at IS NULL FOR SHARE`;
-        if (locked.length === 0) throw new HttpError(400, CATEGORY_GONE, { categoryId: CATEGORY_GONE });
+        await lockCategory(tx, data.categoryId);
         return tx.book.create({ data: { ...data, coverPath }, include: { category: true } });
       });
     } catch (err) {
@@ -257,9 +271,112 @@ function createBookService({
     });
   }
 
-  return { createBook, listBooks, getBook, listBorrowHistory, getBorrowEligibility };
+  // Edge 5: version khác lúc mở form → xung đột. Edge 2: tổng mới được bằng đúng số bản không có sẵn.
+  // Sách hư không quay lại kho (ERD), nên tổng không được nhỏ hơn số đang mượn + hư hỏng.
+  function checkEditable(book, { version, quantity }) {
+    if (book.version !== version) throw new HttpError(409, VERSION_CONFLICT, { version: VERSION_CONFLICT });
+    const minimum = book.borrowedQuantity + book.damagedQuantity;
+    if (quantity < minimum) {
+      const message = book.damagedQuantity > 0
+        ? `Tổng số lượng không được nhỏ hơn ${minimum} (${book.borrowedQuantity} bản đang mượn, ${book.damagedQuantity} bản hư hỏng)`
+        : `Tổng số lượng không được nhỏ hơn số bản đang mượn (${book.borrowedQuantity})`;
+      throw new HttpError(400, message, { quantity: message });
+    }
+  }
+
+  // 2.2.5. Input đã qua Joi (như 2.2.2 + version, removeCover). Thứ tự như 2.2.2:
+  // kiểm tra trước → upload ảnh mới → transaction khóa sách và kiểm tra lại → xóa ảnh cũ.
+  async function updateBook(id, input, file) {
+    const coverType = checkCover(file);
+    const data = {
+      title: input.title,
+      author: input.author,
+      publishYear: input.publishYear,
+      isbn: input.isbn || null,
+      description: input.description,
+      categoryId: input.categoryId,
+    };
+    const current = await findActiveBook(id, {
+      select: { version: true, borrowedQuantity: true, damagedQuantity: true },
+    });
+    checkEditable(current, input);
+    await precheck(data, id);
+
+    const newCover = await uploadCover(file, coverType);
+
+    let row;
+    let oldCover;
+    try {
+      row = await prisma.$transaction(async (tx) => {
+        // Khóa dòng sách: số đang mượn có thể đổi (2.3.2, 2.4.2) giữa lúc kiểm tra và ghi.
+        const [locked] = await tx.$queryRaw`
+          SELECT version, borrowed_quantity AS "borrowedQuantity", damaged_quantity AS "damagedQuantity",
+                 cover_path AS "coverPath"
+          FROM books WHERE id = ${id} AND deleted_at IS NULL FOR UPDATE`;
+        if (!locked) throw new HttpError(404, BOOK_NOT_FOUND);
+        checkEditable(locked, input);
+        await lockCategory(tx, data.categoryId);
+        oldCover = locked.coverPath;
+        return tx.book.update({
+          where: { id },
+          data: {
+            ...data,
+            totalQuantity: input.quantity,
+            availableQuantity: input.quantity - locked.borrowedQuantity - locked.damagedQuantity,
+            coverPath: newCover ?? (input.removeCover ? null : locked.coverPath),
+            version: { increment: 1 },
+          },
+          include: { category: true },
+        });
+      });
+    } catch (err) {
+      // Edge 7: lưu lỗi thì xóa ảnh vừa upload, cover_path cũ giữ nguyên.
+      if (newCover) await removeQuietly(newCover);
+      if (isUniqueViolation(err)) throw new HttpError(409, ISBN_TAKEN, { isbn: ISBN_TAKEN });
+      throw err;
+    }
+
+    // Ảnh cũ chỉ xóa sau khi DB đã trỏ sang ảnh mới (hoặc null); lỗi chỉ ghi log.
+    if (oldCover && oldCover !== row.coverPath) await removeQuietly(oldCover);
+
+    return { book: toBook(row), warning: await duplicateWarning(row) };
+  }
+
+  // Edge 3: đơn chờ xác nhận cũng là đơn hoạt động. Quá hạn là `borrowing` quá hạn trả, và yêu cầu trả
+  // chờ xác nhận chỉ có trên đơn `borrowing`, nên ACTIVE_STATUSES đã bao gồm cả hai.
+  function countActiveBorrows(client, bookId) {
+    return client.borrowOrder.count({ where: { bookId, status: { in: ACTIVE_STATUSES } } });
+  }
+
+  // 2.2.5: kiểm tra trước khi hiện hộp thoại xác nhận; khi xóa server kiểm tra lại.
+  async function getDeleteCheck(id) {
+    await findActiveBook(id, { select: { id: true } });
+    const activeBorrowCount = await countActiveBorrows(prisma, id);
+    return { canDelete: activeBorrowCount === 0, activeBorrowCount };
+  }
+
+  // Edge 1 [Giả định]: soft delete để giữ lịch sử mượn và báo cáo. Edge 8: giữ ảnh bìa trên Storage.
+  async function deleteBook(id) {
+    await prisma.$transaction(async (tx) => {
+      // Khóa dòng sách để đơn mượn mới (2.3.1, khóa cùng dòng) không chen vào giữa lúc đếm và xóa.
+      const locked = await tx.$queryRaw`SELECT id FROM books WHERE id = ${id} AND deleted_at IS NULL FOR UPDATE`;
+      if (locked.length === 0) throw new HttpError(404, BOOK_NOT_FOUND);
+      const active = await countActiveBorrows(tx, id);
+      if (active > 0) throw new HttpError(409, activeBorrowsMessage(active));
+      await tx.book.update({ where: { id }, data: { deletedAt: now() } });
+    });
+  }
+
+  return {
+    createBook, listBooks, getBook, listBorrowHistory, getBorrowEligibility, updateBook, getDeleteCheck, deleteBook,
+  };
+}
+
+function activeBorrowsMessage(count) {
+  return `Không thể xóa: sách đang có ${count} đơn mượn hoạt động (chờ xác nhận, đang mượn hoặc quá hạn)`;
 }
 
 module.exports = {
-  createBookService, COVER_BUCKET, ISBN_TAKEN, CATEGORY_GONE, DUPLICATE_TITLE, BOOK_NOT_FOUND, PAGE_SIZE, escapeLike,
+  createBookService, COVER_BUCKET, ISBN_TAKEN, CATEGORY_GONE, DUPLICATE_TITLE, BOOK_NOT_FOUND, VERSION_CONFLICT,
+  PAGE_SIZE, escapeLike, activeBorrowsMessage,
 };

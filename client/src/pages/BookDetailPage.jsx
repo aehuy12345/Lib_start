@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { parseApiError } from '../api/client'
 import { useAuth } from '../features/auth/AuthContext'
 import { dashboardPath } from '../features/auth/session'
-import { getBook, getBorrowEligibility, getBorrowHistory } from '../features/book/bookApi'
+import { deleteBook, getBook, getBorrowEligibility, getBorrowHistory, getDeleteCheck } from '../features/book/bookApi'
 import BookCover from '../features/book/BookCover'
 import Pagination from '../features/book/Pagination'
 import { BORROW_STATUS_LABELS, borrowButtonState, formatDate, isStaff } from '../features/book/bookDetail'
@@ -43,6 +43,51 @@ function BorrowAction({ book, eligibility }) {
       {state.kind === 'login' && <p className="mt-2 text-xs text-slate-500">Bạn cần đăng nhập để mượn sách</p>}
       {state.message && <p id="borrow-blocked" className="mt-2 text-sm text-red-700">{state.message}</p>}
       {notice && <p role="status" className="mt-2 text-sm text-slate-600">{notice}</p>}
+    </div>
+  )
+}
+
+// 2.2.5: chỉ nhân viên thấy; server cũng chặn độc giả (edge 6).
+function StaffActions({ book, role, listSearch, backTo }) {
+  const navigate = useNavigate()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  // Flow xóa: kiểm tra đơn hoạt động trước khi hỏi xác nhận; server kiểm tra lại khi xóa.
+  const onDelete = async () => {
+    setError('')
+    setBusy(true)
+    try {
+      const check = await getDeleteCheck(book.id)
+      if (!check.canDelete) {
+        setError(`Không thể xóa: sách đang có ${check.activeBorrowCount} đơn mượn hoạt động (chờ xác nhận, đang mượn hoặc quá hạn)`)
+        return
+      }
+      if (!window.confirm(`Xóa sách "${book.title}"?`)) return
+      await deleteBook(book.id)
+      navigate(backTo, { state: { notice: `Đã xóa sách "${book.title}"` } })
+    } catch (err) {
+      setError(err?.response?.status === 404 ? 'Sách không còn tồn tại, có thể đã bị xóa' : parseApiError(err).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="mt-6">
+      <div className="flex gap-2">
+        <Link
+          to={`/${role}/books/${book.id}/edit`}
+          state={{ listSearch }}
+          className={`${BUTTON_CLASS} border border-slate-300 bg-white text-slate-700 hover:bg-slate-50`}
+        >
+          Sửa
+        </Link>
+        <button type="button" onClick={onDelete} disabled={busy} className={`${BUTTON_CLASS} bg-red-600 text-white hover:bg-red-700`}>
+          Xóa
+        </button>
+      </div>
+      {error && <p role="alert" className="mt-2 text-sm text-red-700">{error}</p>}
     </div>
   )
 }
@@ -122,8 +167,12 @@ export default function BookDetailPage() {
   const [eligibility, setEligibility] = useState(undefined)
   const [reloadKey, setReloadKey] = useState(0)
   const isReader = status === 'authenticated' && user.role === 'reader'
+  const staff = status === 'authenticated' && isStaff(user.role)
+  // 2.2.5: thông báo sau khi lưu ở trang sửa.
+  const notice = location.state?.notice
   // Quay lại danh sách giữ nguyên bộ lọc nếu đi từ trang danh sách.
-  const backTo = `/books${location.state?.listSearch ?? ''}`
+  const listSearch = location.state?.listSearch
+  const backTo = `/books${listSearch ?? ''}`
 
   useEffect(() => {
     let ignore = false
@@ -195,6 +244,12 @@ export default function BookDetailPage() {
 
         {book && (
           <>
+            {notice && (
+              <div role="status" className="mb-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
+                <p>{notice.text}</p>
+                {notice.warning && <p className="mt-1 text-amber-700">{notice.warning}</p>}
+              </div>
+            )}
             <article aria-labelledby="book-title" className="flex flex-col gap-6 rounded-lg bg-white p-6 shadow-sm sm:flex-row">
               <div className="w-full max-w-[200px] shrink-0">
                 <BookCover url={book.coverUrl} title={book.title} lazy={false} />
@@ -216,10 +271,10 @@ export default function BookDetailPage() {
                 <h2 className="mt-4 text-sm font-semibold text-slate-900">Mô tả</h2>
                 <p className="mt-1 whitespace-pre-line break-words text-sm text-slate-700">{book.description}</p>
                 <BorrowAction book={book} eligibility={eligibility} />
+                {staff && <StaffActions book={book} role={user.role} listSearch={listSearch} backTo={backTo} />}
               </div>
             </article>
-            {/* TODO 2.2.5: nút Sửa và Xóa cho nhân viên. */}
-            {status === 'authenticated' && isStaff(user.role) && <BorrowHistory bookId={book.id} />}
+            {staff && <BorrowHistory bookId={book.id} />}
           </>
         )}
       </section>

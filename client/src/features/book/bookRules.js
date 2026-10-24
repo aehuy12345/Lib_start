@@ -68,3 +68,16 @@ export function validateCoverFile(file) {
   if (!AVATAR_TYPES.includes(file.type) || file.size > AVATAR_MAX_BYTES) return COVER_ERROR
   return null
 }
+
+// 2.2.5: tổng số lượng mới không nhỏ hơn số bản đang mượn + hư hỏng; câu chữ khớp server.
+export function minQuantityRule({ borrowedQuantity = 0, damagedQuantity = 0 }) {
+  const minimum = borrowedQuantity + damagedQuantity
+  const message = damagedQuantity > 0
+    ? `Tổng số lượng không được nhỏ hơn ${minimum} (${borrowedQuantity} bản đang mượn, ${damagedQuantity} bản hư hỏng)`
+    : `Tổng số lượng không được nhỏ hơn số bản đang mượn (${borrowedQuantity})`
+  return (v) => {
+    const base = bookRules.quantity.validate(v)
+    if (base !== true) return base
+    return Number(String(v).trim()) >= minimum || message
+  }
+}

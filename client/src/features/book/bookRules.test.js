@@ -1,4 +1,4 @@
-import { bookRules, isValidIsbn, normalizeIsbn, validateCoverFile } from './bookRules'
+import { bookRules, isValidIsbn, minQuantityRule, normalizeIsbn, validateCoverFile } from './bookRules'
 
 const check = (field, value) => bookRules[field].validate(value)
 
@@ -56,4 +56,24 @@ describe('validateCoverFile', () => {
     { type: 'image/gif', size: 100 },
     { type: 'image/jpeg', size: 2 * 1024 * 1024 + 1 },
   ])('%j → lỗi', (file) => expect(validateCoverFile(file)).toBe('Chỉ nhận ảnh JPG, PNG, WebP tối đa 2 MB'))
+})
+
+describe('minQuantityRule (2.2.5)', () => {
+  it('tổng mới bằng đúng số đang mượn → hợp lệ (edge 2); nhỏ hơn → lỗi', () => {
+    const rule = minQuantityRule({ borrowedQuantity: 2, damagedQuantity: 0 })
+    expect(rule('2')).toBe(true)
+    expect(rule('1')).toBe('Tổng số lượng không được nhỏ hơn số bản đang mượn (2)')
+  })
+
+  it('tính cả bản hư hỏng', () => {
+    const rule = minQuantityRule({ borrowedQuantity: 2, damagedQuantity: 1 })
+    expect(rule('3')).toBe(true)
+    expect(rule('2')).toBe('Tổng số lượng không được nhỏ hơn 3 (2 bản đang mượn, 1 bản hư hỏng)')
+  })
+
+  it('vẫn áp dụng quy tắc 2.2.2 trước', () => {
+    const rule = minQuantityRule({ borrowedQuantity: 0 })
+    expect(rule('0')).toBe('Số lượng phải lớn hơn 0')
+    expect(rule('1.5')).toBe('Số lượng phải là số nguyên')
+  })
 })

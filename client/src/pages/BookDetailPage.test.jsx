@@ -4,10 +4,12 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import BookDetailPage from './BookDetailPage'
 import { AuthProvider } from '../features/auth/AuthContext'
 import { getMe } from '../features/auth/authApi'
-import { getBook, getBorrowEligibility, getBorrowHistory } from '../features/book/bookApi'
+import { deleteBook, getBook, getBorrowEligibility, getBorrowHistory, getDeleteCheck } from '../features/book/bookApi'
 
 vi.mock('../features/auth/authApi', () => ({ login: vi.fn(), getMe: vi.fn() }))
-vi.mock('../features/book/bookApi', () => ({ getBook: vi.fn(), getBorrowHistory: vi.fn(), getBorrowEligibility: vi.fn() }))
+vi.mock('../features/book/bookApi', () => ({
+  getBook: vi.fn(), getBorrowHistory: vi.fn(), getBorrowEligibility: vi.fn(), getDeleteCheck: vi.fn(), deleteBook: vi.fn(),
+}))
 
 const BOOK = {
   id: 7, title: 'Dế Mèn phiêu lưu ký', author: 'Tô Hoài', isbn: '9780306406157', publishYear: 1941,
@@ -33,14 +35,14 @@ function Spy() {
   return <span data-testid="location">{pathname + search}</span>
 }
 
-function setup({ role, url = '/books/7' } = {}) {
+function setup({ role, url = '/books/7', state } = {}) {
   if (role) {
     localStorage.setItem('token', 't')
     getMe.mockResolvedValue(USERS[role])
   }
   const user = userEvent.setup()
   render(
-    <MemoryRouter initialEntries={[url]}>
+    <MemoryRouter initialEntries={[state ? { pathname: url, state } : url]}>
       <AuthProvider>
         <Routes>
           <Route path="/books/:id" element={<BookDetailPage />} />
@@ -165,5 +167,68 @@ describe('BookDetailPage (2.2.4)', () => {
     expect(nav).toHaveTextContent('Trang 1 / 2')
     await user.click(within(nav).getByRole('button', { name: 'Trang sau' }))
     expect(getBorrowHistory).toHaveBeenLastCalledWith(7, 2)
+  })
+})
+
+describe('BookDetailPage — Sửa & Xóa (2.2.5)', () => {
+  const location = () => screen.getByTestId('location')
+
+  it.each(['reader', undefined])('%s: không thấy nút Sửa/Xóa', async (role) => {
+    setup({ role })
+    await screen.findByRole('heading', { name: BOOK.title })
+    expect(screen.queryByRole('link', { name: 'Sửa' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Xóa' })).not.toBeInTheDocument()
+  })
+
+  it.each(['librarian', 'admin'])('%s: nút Sửa mở trang sửa theo vai trò', async (role) => {
+    const user = setup({ role })
+    await user.click(await screen.findByRole('link', { name: 'Sửa' }))
+    expect(location()).toHaveTextContent(`/${role}/books/7/edit`)
+  })
+
+  it('còn đơn hoạt động → chặn xóa, báo số đơn, không hỏi xác nhận', async () => {
+    getDeleteCheck.mockResolvedValue({ canDelete: false, activeBorrowCount: 2 })
+    const confirm = vi.spyOn(window, 'confirm')
+    const user = setup({ role: 'librarian' })
+    await user.click(await screen.findByRole('button', { name: 'Xóa' }))
+    expect(await screen.findByText(/sách đang có 2 đơn mượn hoạt động/)).toBeInTheDocument()
+    expect(confirm).not.toHaveBeenCalled()
+    expect(deleteBook).not.toHaveBeenCalled()
+  })
+
+  it('hủy hộp thoại xác nhận → ở lại trang chi tiết', async () => {
+    getDeleteCheck.mockResolvedValue({ canDelete: true, activeBorrowCount: 0 })
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const user = setup({ role: 'librarian' })
+    await user.click(await screen.findByRole('button', { name: 'Xóa' }))
+    expect(window.confirm).toHaveBeenCalledWith('Xóa sách "Dế Mèn phiêu lưu ký"?')
+    expect(deleteBook).not.toHaveBeenCalled()
+    expect(screen.getByRole('heading', { name: BOOK.title })).toBeInTheDocument()
+  })
+
+  it('đồng ý → xóa và về danh sách (giữ bộ lọc)', async () => {
+    getDeleteCheck.mockResolvedValue({ canDelete: true, activeBorrowCount: 0 })
+    deleteBook.mockResolvedValue({ message: 'Đã xóa sách' })
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const user = setup({ role: 'librarian', state: { listSearch: '?q=de' } })
+    await user.click(await screen.findByRole('button', { name: 'Xóa' }))
+    expect(deleteBook).toHaveBeenCalledWith(7)
+    expect(await screen.findByTestId('location')).toHaveTextContent('/books?q=de')
+  })
+
+  it('có đơn mới trong lúc xác nhận (409) → hiện lỗi của server', async () => {
+    getDeleteCheck.mockResolvedValue({ canDelete: true, activeBorrowCount: 0 })
+    deleteBook.mockRejectedValue(apiError(409, { message: 'Không thể xóa: sách đang có 1 đơn mượn hoạt động' }))
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const user = setup({ role: 'librarian' })
+    await user.click(await screen.findByRole('button', { name: 'Xóa' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('1 đơn mượn hoạt động')
+  })
+
+  it('hiện thông báo cập nhật thành công (kèm cảnh báo) khi đến từ trang sửa', async () => {
+    setup({ role: 'librarian', state: { notice: { text: 'Cập nhật sách thành công', warning: 'Lưu ý: đã có sách cùng tên và tác giả' } } })
+    const status = await screen.findByRole('status')
+    expect(status).toHaveTextContent('Cập nhật sách thành công')
+    expect(status).toHaveTextContent('Lưu ý: đã có sách cùng tên và tác giả')
   })
 })

@@ -32,3 +32,25 @@ export async function getBorrowEligibility(id) {
   const { data } = await api.get(`/books/${encodeURIComponent(id)}/borrow-eligibility`)
   return data
 }
+
+// 2.2.5: sửa sách (multipart như createBook). version cho khóa lạc quan; removeCover xóa ảnh hiện tại.
+export async function updateBook(id, values, { version, cover, removeCover }) {
+  const form = new FormData()
+  Object.entries(values).forEach(([key, value]) => form.append(key, value))
+  form.append('version', version)
+  form.append('removeCover', removeCover ? 'true' : 'false')
+  if (cover) form.append('cover', cover)
+  const { data } = await api.put(`/books/${encodeURIComponent(id)}`, form)
+  return data
+}
+
+// 2.2.5: số đơn mượn hoạt động, kiểm tra trước khi hỏi xác nhận xóa.
+export async function getDeleteCheck(id) {
+  const { data } = await api.get(`/books/${encodeURIComponent(id)}/delete-check`)
+  return data
+}
+
+export async function deleteBook(id) {
+  const { data } = await api.delete(`/books/${encodeURIComponent(id)}`)
+  return data
+}

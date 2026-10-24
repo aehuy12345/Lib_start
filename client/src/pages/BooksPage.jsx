@@ -45,6 +45,8 @@ function BookCard({ book }) {
 export default function BooksPage() {
   const { status, user } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
+  // 2.2.5: thông báo sau khi xóa sách ở trang chi tiết.
+  const deletedNotice = useLocation().state?.notice
   const params = readListParams(searchParams)
   const { q, categoryId, sort, page } = params
   const [keyword, setKeyword] = useState(q)
@@ -123,6 +125,7 @@ export default function BooksPage() {
       </header>
 
       <section className="mx-auto max-w-6xl p-6">
+        {deletedNotice && <p role="status" className="mb-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">{deletedNotice}</p>}
         <div className="mb-4 flex flex-wrap items-end gap-3">
           <form role="search" aria-label="Tìm sách" onSubmit={onSearch} className="flex flex-1 gap-2">
             <label htmlFor="book-search" className="sr-only">Tìm theo tên sách hoặc tác giả</label>

@@ -24,7 +24,7 @@ describe('borrowHistoryQuerySchema', () => {
 const BOOK_ROW = {
   id: 7, title: 'Dế Mèn', author: 'Tô Hoài', publishYear: 1941, isbn: '9780306406157', description: 'Truyện',
   category: { id: 2, name: 'Thiếu nhi' }, coverPath: null, totalQuantity: 5, availableQuantity: 2,
-  borrowedQuantity: 3, damagedQuantity: 0, createdAt: new Date('2026-10-01T00:00:00Z'),
+  borrowedQuantity: 3, damagedQuantity: 0, version: 2, createdAt: new Date('2026-10-01T00:00:00Z'),
 };
 // 2026-10-24 17:30 UTC = ngày 25/10 theo giờ Việt Nam.
 const NOW = new Date('2026-10-24T17:30:00Z');
@@ -55,7 +55,7 @@ describe('bookService.getBook (2.2.4)', () => {
     expect(book).toEqual({
       id: 7, title: 'Dế Mèn', author: 'Tô Hoài', publishYear: 1941, isbn: '9780306406157', description: 'Truyện',
       category: { id: 2, name: 'Thiếu nhi' }, coverUrl: null, totalQuantity: 5, availableQuantity: 2,
-      borrowedQuantity: 3, createdAt: BOOK_ROW.createdAt,
+      borrowedQuantity: 3, damagedQuantity: 0, version: 2, createdAt: BOOK_ROW.createdAt,
     });
   });
 

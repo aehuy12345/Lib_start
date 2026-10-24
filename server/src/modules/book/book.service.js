@@ -3,8 +3,11 @@ const { Prisma } = require('@prisma/client');
 const { HttpError } = require('../../lib/httpError');
 const { detectImageType } = require('../../lib/imageType');
 const { MAX_IMAGE_BYTES, INVALID_IMAGE } = require('../../middlewares/upload');
+const { businessToday, toDateString } = require('../../lib/businessDate');
+const { ACTIVE_STATUSES, evaluateBorrowEligibility } = require('../borrow/borrow.rules');
 
 const COVER_BUCKET = 'book-covers';
+const BOOK_NOT_FOUND = 'Không tìm thấy sách';
 const ISBN_TAKEN = 'ISBN đã tồn tại. Nếu là cùng đầu sách, hãy cập nhật số lượng ở sách đã có';
 const CATEGORY_GONE = 'Thể loại không tồn tại hoặc đã bị xóa, vui lòng chọn lại';
 const DUPLICATE_TITLE = 'Lưu ý: đã có sách cùng tên và tác giả';
@@ -31,6 +34,7 @@ function createBookService({
   storage,
   newId = () => crypto.randomUUID(),
   logger = console,
+  now = () => new Date(),
 }) {
   function toBook(row) {
     return {
@@ -187,9 +191,75 @@ function createBookService({
     };
   }
 
-  return { createBook, listBooks };
+  async function findActiveBook(id, select) {
+    const book = await prisma.book.findFirst({ where: { id, deletedAt: null }, ...select });
+    // Edge 2: sách đã xóa mềm cũng là 404.
+    if (!book) throw new HttpError(404, BOOK_NOT_FOUND);
+    return book;
+  }
+
+  // 2.2.4, công khai: chỉ thông tin sách, không kèm lịch sử mượn (edge 4).
+  async function getBook(id) {
+    return toBook(await findActiveBook(id, { include: { category: true } }));
+  }
+
+  // 2.2.4, chỉ nhân viên. [Giả định] gồm mọi đơn của sách kèm trạng thái; `overdue` suy ra từ hạn trả.
+  async function listBorrowHistory(id, { page = 1 }) {
+    await findActiveBook(id, { select: { id: true } });
+    const total = await prisma.borrowOrder.count({ where: { bookId: id } });
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    const current = Math.min(page, totalPages);
+    const rows = total === 0 ? [] : await prisma.borrowOrder.findMany({
+      where: { bookId: id },
+      include: { reader: { select: { id: true, name: true, email: true } } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      skip: (current - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    });
+
+    const today = businessToday(now());
+    const toHistoryItem = (row) => {
+      const dueDate = toDateString(row.dueDate);
+      return {
+        id: row.id,
+        reader: row.reader,
+        status: row.status === 'borrowing' && dueDate < today ? 'overdue' : row.status,
+        requestedAt: row.createdAt,
+        borrowedAt: row.borrowedAt,
+        dueDate,
+        returnedAt: row.returnedAt,
+      };
+    };
+    return {
+      borrows: rows.map(toHistoryItem),
+      pagination: { page: current, pageSize: PAGE_SIZE, total, totalPages },
+    };
+  }
+
+  // 2.2.4: độc giả có mượn được sách này không (khóa nút Mượn kèm lý do).
+  async function getBorrowEligibility(id, readerId) {
+    const book = await findActiveBook(id, { select: { availableQuantity: true } });
+    const active = { readerId, status: { in: ACTIVE_STATUSES } };
+    const [activeCount, sameBookCount, unpaidFineCount, overdueCount] = await Promise.all([
+      prisma.borrowOrder.count({ where: active }),
+      prisma.borrowOrder.count({ where: { ...active, bookId: id } }),
+      prisma.fineTicket.count({ where: { readerId, status: { not: 'paid' } } }),
+      prisma.borrowOrder.count({
+        where: { readerId, status: 'borrowing', dueDate: { lt: new Date(businessToday(now())) } },
+      }),
+    ]);
+    return evaluateBorrowEligibility({
+      availableQuantity: book.availableQuantity,
+      activeCount,
+      unpaidFineCount,
+      overdueCount,
+      hasActiveOrderForBook: sameBookCount > 0,
+    });
+  }
+
+  return { createBook, listBooks, getBook, listBorrowHistory, getBorrowEligibility };
 }
 
 module.exports = {
-  createBookService, COVER_BUCKET, ISBN_TAKEN, CATEGORY_GONE, DUPLICATE_TITLE, PAGE_SIZE, escapeLike,
+  createBookService, COVER_BUCKET, ISBN_TAKEN, CATEGORY_GONE, DUPLICATE_TITLE, BOOK_NOT_FOUND, PAGE_SIZE, escapeLike,
 };

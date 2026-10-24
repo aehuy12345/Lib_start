@@ -18,6 +18,10 @@ const USERS = [
     email: 'test.profile@example.com', name: 'Test Profile', role: 'reader', status: 'active',
     phone: null, address: null, avatarPath: null,
   },
+  // 2.2.4: mỗi tài khoản rơi vào một lý do khóa nút Mượn (xem seedBookDetail).
+  { email: 'test.borrower@example.com', name: 'Test Borrower', role: 'reader', status: 'active' },
+  { email: 'test.fined@example.com', name: 'Test Fined', role: 'reader', status: 'active' },
+  { email: 'test.overdue@example.com', name: 'Test Overdue', role: 'reader', status: 'active' },
 ];
 
 async function main() {
@@ -33,9 +37,11 @@ async function main() {
   }
   console.log(`Mật khẩu chung: ${PASSWORD}`);
 
+  await cleanTestBorrows(prisma);
   await cleanTestBooks(prisma);
   await seedCategories(prisma);
   await seedBookList(prisma);
+  await seedBookDetail(prisma);
   await prisma.$disconnect();
 }
 
@@ -118,6 +124,110 @@ async function seedBookList(prisma) {
     })),
   });
   console.log(`category  "${CATEGORY_LIST}" (id ${category.id}) có 12 sách cho E2E 2.2.3`);
+}
+
+// 2.2.4: dọn đơn mượn, yêu cầu trả, phiếu phạt của tài khoản test để sách test xóa được.
+// Chạy trước cleanTestBooks. Mức phạt "Test ..." không còn phiếu nào cũng bị xóa.
+async function cleanTestBorrows(prisma) {
+  const readers = { email: { in: USERS.map((u) => u.email) } };
+  const fines = await prisma.fineTicket.deleteMany({ where: { reader: readers } });
+  await prisma.returnRequest.deleteMany({ where: { borrowOrder: { reader: readers } } });
+  const orders = await prisma.borrowOrder.deleteMany({ where: { reader: readers } });
+  await prisma.fineTier.deleteMany({ where: { name: { startsWith: 'Test ' }, fineTickets: { none: {} } } });
+  console.log(`borrow    đã dọn ${orders.count} đơn mượn, ${fines.count} phiếu phạt của tài khoản test`);
+}
+
+// 2.2.4: thể loại "Test Chi Tiết": sách CT 01 có 12 đơn mượn (2 trang lịch sử, đủ trạng thái),
+// CT 02..05 để test.borrower đủ 5 đơn đang hoạt động. Lý do khóa nút Mượn ở CT 01:
+//   test.reader   → đã gửi yêu cầu (pending)     test.borrower → đạt giới hạn 5 cuốn
+//   test.fined    → có phiếu phạt chưa thanh toán test.overdue  → có sách quá hạn
+// Sách hết hàng dùng "Test Sách DS 07"; test.reader mượn được "Test Sách DS 01".
+const CATEGORY_DETAIL = 'Test Chi Tiết';
+const DETAIL_BOOK = 'Test Sách CT 01 Lịch Sử';
+const DAY = 24 * 60 * 60 * 1000;
+
+// Ngày nghiệp vụ (cột date) theo Asia/Ho_Chi_Minh, lệch `days` ngày so với hôm nay.
+function businessDate(days) {
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
+  return new Date(Date.parse(today) + days * DAY);
+}
+
+async function seedBookDetail(prisma) {
+  const users = Object.fromEntries((await prisma.user.findMany({
+    where: { email: { in: USERS.map((u) => u.email) } },
+    select: { id: true, email: true },
+  })).map((u) => [u.email.split('@')[0].replace('test.', ''), u.id]));
+  const category = await prisma.category.findFirst({ where: { name: CATEGORY_DETAIL, deletedAt: null } })
+    ?? await prisma.category.create({ data: { name: CATEGORY_DETAIL } });
+
+  const base = { author: 'Tác Giả CT', publishYear: 2015, description: 'Dữ liệu test 2.2.4', categoryId: category.id };
+  // Đang mượn: test.borrower + test.overdue → borrowed 2, available 3.
+  const book = await prisma.book.create({
+    data: {
+      ...base, title: DETAIL_BOOK, isbn: '0306406152', borrowCount: 11,
+      totalQuantity: 5, availableQuantity: 3, borrowedQuantity: 2,
+    },
+  });
+  const others = [];
+  for (let i = 2; i <= 5; i++) {
+    others.push(await prisma.book.create({
+      data: { ...base, title: `Test Sách CT 0${i}`, totalQuantity: 1, availableQuantity: 1 },
+    }));
+  }
+
+  const now = Date.now();
+  const at = (daysAgo) => new Date(now - daysAgo * DAY);
+  const processed = { processedById: users.librarian };
+  const returned = (readerId, daysAgo) => ({
+    readerId, status: 'returned', ...processed, processedAt: at(daysAgo), createdAt: at(daysAgo + 1),
+    borrowedAt: at(daysAgo), dueDate: businessDate(-daysAgo + 14), returnedAt: at(daysAgo - 5),
+  });
+  const rejected = (readerId, daysAgo) => ({
+    readerId, status: 'rejected', ...processed, processedAt: at(daysAgo), createdAt: at(daysAgo + 1),
+    rejectReason: 'Dữ liệu test: từ chối',
+  });
+  const orders = [
+    { readerId: users.reader, status: 'pending', createdAt: at(0) },
+    {
+      readerId: users.borrower, status: 'borrowing', ...processed, processedAt: at(2), createdAt: at(3),
+      borrowedAt: at(2), dueDate: businessDate(12),
+    },
+    {
+      readerId: users.overdue, status: 'borrowing', ...processed, processedAt: at(20), createdAt: at(21),
+      borrowedAt: at(20), dueDate: businessDate(-6),
+    },
+    rejected(users.reader, 25),
+    returned(users.fined, 30),
+    returned(users.reader, 40),
+    rejected(users.borrower, 45),
+    returned(users.overdue, 50),
+    returned(users.borrower, 60),
+    returned(users.reader, 70),
+    rejected(users.fined, 80),
+    returned(users.fined, 90),
+  ];
+  const created = [];
+  for (const order of orders) created.push(await prisma.borrowOrder.create({ data: { ...order, bookId: book.id } }));
+  for (const other of others) {
+    await prisma.borrowOrder.create({ data: { readerId: users.borrower, bookId: other.id, status: 'pending' } });
+  }
+
+  // Phiếu phạt hư hỏng chưa thanh toán của test.fined, gắn với lần trả 30 ngày trước.
+  const finedOrder = created.find((o) => o.readerId === users.fined && o.status === 'returned');
+  const returnRequest = await prisma.returnRequest.create({
+    data: {
+      borrowOrderId: finedOrder.id, status: 'confirmed', requestedById: users.fined, processedById: users.librarian,
+      processedAt: finedOrder.returnedAt, condition: 'damaged', conditionNote: 'Dữ liệu test: rách bìa', lateDays: 0,
+    },
+  });
+  const tier = await prisma.fineTier.create({ data: { name: 'Test Hư Hỏng', type: 'damaged', amount: 50000 } });
+  await prisma.fineTicket.create({
+    data: {
+      readerId: users.fined, borrowOrderId: finedOrder.id, returnRequestId: returnRequest.id, fineTierId: tier.id,
+      type: 'damaged', tierName: tier.name, amount: tier.amount, note: 'Dữ liệu test', issuedById: users.librarian,
+    },
+  });
+  console.log(`category  "${CATEGORY_DETAIL}" (id ${category.id}): "${DETAIL_BOOK}" id ${book.id} có ${orders.length} đơn mượn cho 2.2.4`);
 }
 
 main().catch((err) => {

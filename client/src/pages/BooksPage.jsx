@@ -1,40 +1,19 @@
 import { useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { parseApiError } from '../api/client'
 import { useAuth } from '../features/auth/AuthContext'
 import { dashboardPath } from '../features/auth/session'
 import { listBooks } from '../features/book/bookApi'
+import BookCover from '../features/book/BookCover'
+import Pagination from '../features/book/Pagination'
 import { SORT_OPTIONS, hasFilters, nextListParams, readListParams } from '../features/book/bookListParams'
 import { listCategoryOptions } from '../features/category/categoryApi'
 
 const INPUT_CLASS = 'rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500'
 const BUTTON_CLASS = 'rounded-md px-3 py-1.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50'
 
-// Edge 7, 8: khung cố định để bố cục không nhảy; chưa có ảnh hoặc ảnh lỗi thì hiện ảnh mặc định.
-function BookCover({ url, title }) {
-  const [failed, setFailed] = useState(false)
-  if (url && !failed) {
-    return (
-      <img
-        src={url}
-        alt={`Ảnh bìa ${title}`}
-        loading="lazy"
-        onError={() => setFailed(true)}
-        className="aspect-[2/3] w-full rounded object-cover"
-      />
-    )
-  }
-  return (
-    <div role="img" aria-label="Ảnh bìa mặc định" className="flex aspect-[2/3] w-full items-center justify-center rounded bg-slate-200 text-slate-400">
-      <svg viewBox="0 0 24 24" className="h-10 w-10" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-        <path d="M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2V5z" />
-        <path d="M4 19a2 2 0 0 1 2-2h12" />
-      </svg>
-    </div>
-  )
-}
-
 function BookCard({ book }) {
+  const { search } = useLocation()
   const soldOut = book.availableQuantity === 0
   return (
     <li className="flex flex-col rounded-lg bg-white p-3 shadow-sm">
@@ -45,7 +24,10 @@ function BookCard({ book }) {
             <span className="absolute left-2 top-2 rounded bg-red-600 px-2 py-0.5 text-xs font-semibold text-white">Hết sách</span>
           )}
         </div>
-        <h2 className="mt-2 line-clamp-2 text-sm font-semibold text-slate-900">{book.title}</h2>
+        <h2 className="mt-2 line-clamp-2 text-sm font-semibold text-slate-900">
+          {/* 2.2.4: tên sách mở trang chi tiết. */}
+          <Link to={`/books/${book.id}`} state={{ listSearch: search }} className="hover:text-blue-600 hover:underline">{book.title}</Link>
+        </h2>
         <dl className="mt-1 space-y-0.5 text-xs text-slate-600">
           <div><dt className="inline">Tác giả: </dt><dd className="inline">{book.author}</dd></div>
           <div><dt className="inline">Năm XB: </dt><dd className="inline">{book.publishYear}</dd></div>
@@ -58,20 +40,6 @@ function BookCard({ book }) {
   )
 }
 
-function Pagination({ page, totalPages, onPage }) {
-  if (totalPages <= 1) return null
-  return (
-    <nav aria-label="Phân trang" className="mt-6 flex items-center justify-center gap-3 text-sm">
-      <button type="button" disabled={page <= 1} onClick={() => onPage(page - 1)} className={`${BUTTON_CLASS} border border-slate-300 bg-white text-slate-700 hover:bg-slate-50`}>
-        Trang trước
-      </button>
-      <span className="text-slate-700">Trang {page} / {totalPages}</span>
-      <button type="button" disabled={page >= totalPages} onClick={() => onPage(page + 1)} className={`${BUTTON_CLASS} border border-slate-300 bg-white text-slate-700 hover:bg-slate-50`}>
-        Trang sau
-      </button>
-    </nav>
-  )
-}
 
 // PRD 2.2.3: công khai, không cần đăng nhập. Flow: design/flows/2.2.3-xem-danh-sach-sach.md.
 export default function BooksPage() {

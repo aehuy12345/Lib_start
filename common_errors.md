@@ -4,12 +4,12 @@ Tóm tắt các lỗi đã gặp trong quá trình làm và cách sửa. Nhóm t
 
 ## Môi trường Windows / shell
 
-- **Không có Python** (2.1.2, lặp lại 2.3.2, 2.3.3): `python` trên máy chỉ là alias mở Microsoft Store (exit 49). → Dùng script Node (`node script.js`) hoặc Edit để sửa file; không thử `python` nữa.
+- **Không có Python** (2.1.2, lặp lại 2.3.2, 2.3.3, 2.4.1): `python` trên máy chỉ là alias mở Microsoft Store (exit 49). → Dùng script Node (`node script.js`) hoặc Edit để sửa file; không thử `python` nữa.
 - **File trong repo dùng CRLF** (2.1.2): tìm-thay chuỗi nhiều dòng (dùng `\n`) không khớp. → Đổi về LF trước khi thay rồi ghi lại đúng kiểu xuống dòng cũ, hoặc dùng công cụ Edit/Write.
 - **Thay chuỗi bằng `node -e` không khớp nhưng không báo lỗi** (2.3.3): `s.replace(a, b)` trên file CRLF (`DashboardPage.jsx`) trả về chuỗi cũ, file ghi lại y nguyên; chỉ phát hiện khi xem `git diff --stat`. → Kiểm tra `s.includes(a)` và `throw` nếu không có trước khi thay, hoặc dùng Edit.
 - **`fs.readFileSync('/dev/stdin')` lỗi ENOENT trên Windows** (2.3.3): Node hiểu thành `D:\dev\stdin`, lệnh sửa file dừng giữa chừng nên seed chạy bản cũ. → Đọc stdin bằng `fs.readFileSync(0, 'utf8')`, hoặc dùng Edit.
-- **Heredoc dài trong Git Bash bị lỗi cú pháp** (2.1.2, lặp lại 2.3.2 khi tạo file test): `unexpected EOF while looking for matching '`, gặp khi nội dung có nhiều backtick/nháy. → Tạo file bằng công cụ Write thay vì `cat <<'EOF'`; heredoc chỉ dùng cho đoạn ngắn không có backtick.
-- **Template literal JS trong `node -e "..."` bị Git Bash thực thi** (2.2.5): backtick và `${...}` trong chuỗi nháy kép bị bash coi là command substitution, đoạn code chèn vào file bị mất. → Đoạn code có backtick thì sửa bằng Edit/Write, không chèn qua `node -e`.
+- **Heredoc dài trong Git Bash bị lỗi cú pháp** (2.1.2, lặp lại 2.3.2 và 2.4.1 khi tạo file test): `unexpected EOF while looking for matching '`, gặp khi nội dung có nhiều backtick/nháy. → Tạo file bằng công cụ Write thay vì `cat <<'EOF'`; heredoc chỉ dùng cho đoạn ngắn không có backtick.
+- **Template literal JS trong `node -e "..."` bị Git Bash thực thi** (2.2.5, lặp lại 2.4.1: `Xin: command not found` khi chèn JSX vào `BorrowHistoryPage.jsx`): backtick và `${...}` trong chuỗi nháy kép bị bash coi là command substitution, đoạn code chèn vào file bị mất. → Đoạn code có backtick thì sửa bằng Edit/Write, không chèn qua `node -e`.
 - **Escape trong `sed` hỏng script JS** (2.1.2): `\\r\\n` qua `sed` biến thành ký tự xuống dòng thật. → Không dùng `sed` để chèn chuỗi có escape; viết lại file bằng Write hoặc heredoc.
 - **Lệnh Bash treo tới hết 120s** (2.2.2): một `cat > file` thừa ở đầu chuỗi lệnh chờ stdin mãi, các lệnh sau không chạy. → Không để `cat` không có input trong chuỗi lệnh; sửa file bằng Edit/Write.
 - **`curl -F 'title=Test Sách'` trong Git Bash lưu thành `Test S�ch`** (2.2.2): tham số dòng lệnh có dấu tiếng Việt bị đổi mã trước khi tới server; server và DB không lỗi. → Gửi dữ liệu tiếng Việt qua file JSON (`-d @file.json`), newman hoặc Playwright, không đặt trực tiếp trong tham số curl.

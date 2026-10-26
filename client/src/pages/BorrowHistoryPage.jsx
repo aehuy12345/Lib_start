@@ -4,6 +4,8 @@ import { parseApiError } from '../api/client'
 import { formatDate } from '../features/book/bookDetail'
 import Pagination from '../features/book/Pagination'
 import { cancelBorrowOrder, extendBorrowOrder, listMyOrders } from '../features/borrow/borrowApi'
+import ReturnRequestDialog from '../features/return/ReturnRequestDialog'
+import { cancelReturnRequest, createReturnRequest } from '../features/return/returnApi'
 import {
   HISTORY_FILTERS, STATUS_LABELS, daysLeftLabel, groupOrders, nextHistoryParams, readHistoryParams,
 } from '../features/borrow/borrowHistory'
@@ -38,7 +40,7 @@ const COLUMNS = {
   rejected: ['Sách', 'Lý do từ chối', 'Trạng thái'],
 }
 
-function OrderRow({ group, order, busyId, onExtend, onCancel }) {
+function OrderRow({ group, order, busyId, onExtend, onCancel, onRequestReturn, onCancelReturn }) {
   const busy = busyId === order.id
   const title = order.book.title
   const cells = {
@@ -74,19 +76,44 @@ function OrderRow({ group, order, busyId, onExtend, onCancel }) {
         </td>
         <td className="px-4 py-2"><StatusBadge status={order.status} /></td>
         <td className="px-4 py-2">
-          {/* Yêu cầu trả sách (2.4.1) thêm nút ở đây. */}
-          {order.canExtend && (
-            <button
-              type="button"
-              onClick={() => onExtend(order)}
-              disabled={busy}
-              aria-label={`Gia hạn ${title}`}
-              className={`${BUTTON_CLASS} bg-blue-600 text-white hover:bg-blue-700`}
-            >
-              Gia hạn
-            </button>
-          )}
-          {order.hasPendingReturn && <span className="text-sm text-slate-600">Đang chờ xác nhận trả</span>}
+          <div className="flex flex-wrap items-center gap-2">
+            {order.canExtend && (
+              <button
+                type="button"
+                onClick={() => onExtend(order)}
+                disabled={busy}
+                aria-label={`Gia hạn ${title}`}
+                className={`${BUTTON_CLASS} bg-blue-600 text-white hover:bg-blue-700`}
+              >
+                Gia hạn
+              </button>
+            )}
+            {order.canRequestReturn && (
+              <button
+                type="button"
+                onClick={() => onRequestReturn(order)}
+                disabled={busy}
+                aria-label={`Xin trả sách ${title}`}
+                className={`${BUTTON_CLASS} border border-blue-600 text-blue-700 hover:bg-blue-50`}
+              >
+                Xin trả sách
+              </button>
+            )}
+            {order.hasPendingReturn && (
+              <>
+                <span className="text-sm text-slate-600">Đang chờ xác nhận trả</span>
+                <button
+                  type="button"
+                  onClick={() => onCancelReturn(order)}
+                  disabled={busy}
+                  aria-label={`Hủy yêu cầu trả ${title}`}
+                  className={`${BUTTON_CLASS} border border-slate-300 text-slate-700 hover:bg-slate-50`}
+                >
+                  Hủy yêu cầu trả
+                </button>
+              </>
+            )}
+          </div>
         </td>
       </>
     ),
@@ -118,6 +145,7 @@ export default function BorrowHistoryPage() {
   const [notice, setNotice] = useState({ type: '', text: '' })
   const [busyId, setBusyId] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
+  const [returnTarget, setReturnTarget] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -141,10 +169,10 @@ export default function BorrowHistoryPage() {
     setNotice({ type: '', text: '' })
     setBusyId(order.id)
     try {
-      const result = await action(order.id)
+      const result = await action()
       setNotice({ type: 'success', text: success(result) })
     } catch (err) {
-      // Lỗi nghiệp vụ (vd đã gia hạn, vừa quá hạn) → tải lại để thấy trạng thái mới.
+      // Lỗi nghiệp vụ (vd đã gia hạn, vừa quá hạn, đã có yêu cầu trả) → tải lại để thấy trạng thái mới.
       setNotice({ type: 'error', text: parseApiError(err).message })
     } finally {
       setBusyId(null)
@@ -152,12 +180,26 @@ export default function BorrowHistoryPage() {
     }
   }
 
-  const onExtend = (order) => run(order, extendBorrowOrder,
+  const onExtend = (order) => run(order, () => extendBorrowOrder(order.id),
     ({ order: extended }) => `Đã gia hạn "${order.book.title}", hạn trả mới ${formatDate(extended.dueDate)}`)
 
   const onCancel = (order) => {
     if (!window.confirm(`Hủy yêu cầu mượn "${order.book.title}"?`)) return
-    run(order, cancelBorrowOrder, () => `Đã hủy yêu cầu mượn "${order.book.title}"`)
+    run(order, () => cancelBorrowOrder(order.id), () => `Đã hủy yêu cầu mượn "${order.book.title}"`)
+  }
+
+  const closeReturnDialog = useCallback(() => setReturnTarget(null), [])
+
+  // 2.4.1: gửi xong (kể cả lỗi) thì đóng modal, thông báo hiện trên trang.
+  const onConfirmReturn = async () => {
+    const order = returnTarget
+    await run(order, () => createReturnRequest(order.id), ({ message }) => message)
+    setReturnTarget(null)
+  }
+
+  const onCancelReturn = (order) => {
+    if (!window.confirm(`Hủy yêu cầu trả "${order.book.title}"?`)) return
+    run(order, () => cancelReturnRequest(order.pendingReturnId), () => `Đã hủy yêu cầu trả "${order.book.title}"`)
   }
 
   const groups = groupOrders(data?.orders ?? [])
@@ -216,7 +258,16 @@ export default function BorrowHistoryPage() {
                     </thead>
                     <tbody>
                       {group.orders.map((order) => (
-                        <OrderRow key={order.id} group={group.key} order={order} busyId={busyId} onExtend={onExtend} onCancel={onCancel} />
+                        <OrderRow
+                          key={order.id}
+                          group={group.key}
+                          order={order}
+                          busyId={busyId}
+                          onExtend={onExtend}
+                          onCancel={onCancel}
+                          onRequestReturn={setReturnTarget}
+                          onCancelReturn={onCancelReturn}
+                        />
                       ))}
                     </tbody>
                   </table>
@@ -232,6 +283,15 @@ export default function BorrowHistoryPage() {
           </>
         )}
       </section>
+
+      {returnTarget && (
+        <ReturnRequestDialog
+          order={returnTarget}
+          busy={busyId === returnTarget.id}
+          onConfirm={onConfirmReturn}
+          onClose={closeReturnDialog}
+        />
+      )}
     </main>
   )
 }

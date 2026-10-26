@@ -115,6 +115,10 @@ describe('borrowService.listMyOrders (2.3.3)', () => {
     ]);
     expect(orders[0]).toMatchObject({ dueDate: '2026-10-30', book: { title: 'Sách' }, hasPendingReturn: false });
     expect(orders[3].hasPendingReturn).toBe(true);
+    // 2.4.1: Xin trả sách cho đơn đang mượn/quá hạn chưa có yêu cầu chờ; id để hủy yêu cầu.
+    expect(orders.map((o) => [o.id, o.canRequestReturn, o.pendingReturnId])).toEqual([
+      [1, true, null], [2, true, null], [3, true, null], [4, false, 9], [5, false, null], [6, false, null],
+    ]);
     expect(orders[4].rejectReason).toBe('Hết sách');
   });
 

@@ -5,6 +5,7 @@ const {
   INELIGIBLE, CONFIRM_BLOCKED, EXTEND_BLOCKED, EXTENSION_DAYS,
   evaluateConfirmEligibility, evaluateExtension, displayStatus, addDays, diffDays,
 } = require('./borrow.rules');
+const { evaluateReturnRequest } = require('../return/return.rules');
 
 const BOOK_GONE = 'Sách không còn tồn tại';
 const ORDER_NOT_FOUND = 'Không tìm thấy đơn mượn';
@@ -63,6 +64,9 @@ function toHistoryItem(row, today) {
     extensionCount: row.extensionCount,
     canExtend: active && !evaluateExtension({ ...row, dueDate, hasPendingReturn }, today),
     hasPendingReturn,
+    // 2.4.1: nút Xin trả sách, và id yêu cầu đang chờ để hủy.
+    canRequestReturn: !evaluateReturnRequest({ status: row.status, hasPendingReturn }),
+    pendingReturnId: row.returnRequests[0]?.id ?? null,
     returnedAt: row.returnedAt,
     rejectReason: row.rejectReason,
   };

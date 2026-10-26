@@ -20,6 +20,7 @@ export default function DashboardPage() {
           {user.role === 'reader' && (
             <>
               <Link to="/reader/borrow-history" className="font-medium text-blue-600 hover:underline">Lịch sử mượn sách</Link>
+              <Link to="/reader/fines" className="font-medium text-blue-600 hover:underline">Khoản phạt</Link>
               <Link to="/reader/profile" className="font-medium text-blue-600 hover:underline">Hồ sơ</Link>
             </>
           )}

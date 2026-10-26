@@ -24,6 +24,12 @@ function createSupabaseStorage({ url, serviceRoleKey }) {
       const { error } = await getClient().storage.from(bucket).remove([path]);
       if (error) throw error;
     },
+    // Bucket private (receipts): URL có chữ ký, hết hạn sau `expiresIn` giây.
+    async signedUrl(bucket, path, expiresIn) {
+      const { data, error } = await getClient().storage.from(bucket).createSignedUrl(path, expiresIn);
+      if (error) throw error;
+      return data.signedUrl;
+    },
     // Bucket public: URL có dạng cố định nên không cần gọi API.
     publicUrl(bucket, path) {
       if (!path) return null;

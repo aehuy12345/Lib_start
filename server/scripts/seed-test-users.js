@@ -38,6 +38,9 @@ const USERS = [
   { email: 'test.handover@example.com', name: 'Test Handover', role: 'reader', status: 'active' },
   // 2.5.1: có phiếu phạt đã thanh toán dùng mức "Test MP Dùng ..." (xem seedFineTiers).
   { email: 'test.tiered@example.com', name: 'Test Tiered', role: 'reader', status: 'active' },
+  // 2.5.2: cùng bộ phiếu phạt (xem seedFinePayment); payer cho Postman, payee cho E2E.
+  { email: 'test.payer@example.com', name: 'Test Payer', role: 'reader', status: 'active' },
+  { email: 'test.payee@example.com', name: 'Test Payee', role: 'reader', status: 'active' },
 ];
 
 async function main() {
@@ -65,6 +68,7 @@ async function main() {
   await seedReturnRequest(prisma);
   await seedReturnConfirm(prisma);
   await seedFineTiers(prisma);
+  await seedFinePayment(prisma);
   await prisma.$disconnect();
 }
 
@@ -153,6 +157,19 @@ async function seedBookList(prisma) {
 // Chạy trước cleanTestBooks. Mức phạt "Test ..." không còn phiếu nào cũng bị xóa.
 async function cleanTestBorrows(prisma) {
   const readers = { email: { in: USERS.map((u) => u.email) } };
+  // 2.5.2: ảnh biên lai do API/E2E test tải lên (bucket private receipts).
+  const receipts = await prisma.fineTicket.findMany({
+    where: { reader: readers, receiptPath: { not: null } }, select: { receiptPath: true },
+  });
+  if (receipts.length > 0) {
+    const storage = createSupabaseStorage({
+      url: process.env.SUPABASE_URL,
+      serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    });
+    for (const { receiptPath } of receipts) {
+      await storage.remove('receipts', receiptPath).catch((err) => console.error(`Không xóa được biên lai ${receiptPath}`, err.message));
+    }
+  }
   const fines = await prisma.fineTicket.deleteMany({ where: { reader: readers } });
   await prisma.returnRequest.deleteMany({ where: { borrowOrder: { reader: readers } } });
   const orders = await prisma.borrowOrder.deleteMany({ where: { reader: readers } });
@@ -599,6 +616,70 @@ async function seedFineTiers(prisma) {
     });
   }
   console.log(`fine-tier ${created.map((t) => `"${t.name}" ${t.id}`).join(', ')} cho 2.5.1`);
+}
+
+// 2.5.2: test.payer (Postman) và test.payee (E2E) có cùng 5 phiếu phạt, sách TT 01 thể loại
+// "Test Thanh Toán Phạt"; mỗi phiếu một đơn đã trả + một yêu cầu trả đã xác nhận riêng.
+//   TT-A Trả muộn 10.000 Chưa thanh toán (mới nhất)   TT-B Hư hỏng 50.000 Chưa thanh toán
+//   TT-C Mất 120.000 Từ chối (có lý do)               TT-D Trả muộn 10.000 Chờ xác nhận
+//   TT-E Hư hỏng 50.000 Đã thanh toán
+const CATEGORY_FINE_PAYMENT = 'Test Thanh Toán Phạt';
+
+async function seedFinePayment(prisma) {
+  const librarian = await prisma.user.findUnique({ where: { email: 'test.librarian@example.com' }, select: { id: true } });
+  const category = await prisma.category.findFirst({ where: { name: CATEGORY_FINE_PAYMENT, deletedAt: null } })
+    ?? await prisma.category.create({ data: { name: CATEGORY_FINE_PAYMENT } });
+  const book = await prisma.book.create({
+    data: {
+      title: 'Test Sách TT 01 Thanh Toán', author: 'Tác Giả TT', publishYear: 2023, description: 'Dữ liệu test 2.5.2',
+      categoryId: category.id, totalQuantity: 3, availableQuantity: 3,
+    },
+  });
+  const tiers = {};
+  for (const [name, type, amount] of [
+    ['Test TT Trả Muộn', 'late', 10000], ['Test TT Hư Hỏng', 'damaged', 50000], ['Test TT Mất', 'lost', 120000],
+  ]) {
+    tiers[type] = await prisma.fineTier.create({ data: { name, type, amount } });
+  }
+  const at = (daysAgo) => new Date(Date.now() - daysAgo * DAY);
+  const tickets = [
+    // [type, status, ngày phạt cách đây, thêm]
+    ['late', 'unpaid', 1, {}],
+    ['damaged', 'unpaid', 2, { note: 'Rách bìa (test 2.5.2)' }],
+    ['lost', 'rejected', 3, { submittedAt: at(2), rejectedAt: at(1), rejectReason: 'Chưa nhận được tiền chuyển khoản' }],
+    ['late', 'pending', 4, { submittedAt: at(3) }],
+    ['damaged', 'paid', 5, { submittedAt: at(4), confirmedAt: at(3) }],
+  ];
+  for (const email of ['test.payer@example.com', 'test.payee@example.com']) {
+    const reader = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+    const ids = [];
+    for (const [type, status, daysAgo, extra] of tickets) {
+      const order = await prisma.borrowOrder.create({
+        data: {
+          readerId: reader.id, bookId: book.id, status: 'returned', processedById: librarian.id, processedAt: at(daysAgo + 20),
+          createdAt: at(daysAgo + 21), borrowedAt: at(daysAgo + 20), dueDate: businessDate(-daysAgo - 6), returnedAt: at(daysAgo),
+        },
+      });
+      const condition = type === 'late' ? 'normal' : type;
+      const returnRequest = await prisma.returnRequest.create({
+        data: {
+          borrowOrderId: order.id, status: 'confirmed', requestedById: reader.id, processedById: librarian.id,
+          processedAt: at(daysAgo), condition, conditionNote: condition === 'normal' ? null : 'Dữ liệu test 2.5.2',
+          lateDays: type === 'late' ? 6 : 0,
+        },
+      });
+      const tier = tiers[type];
+      const ticket = await prisma.fineTicket.create({
+        data: {
+          readerId: reader.id, borrowOrderId: order.id, returnRequestId: returnRequest.id, fineTierId: tier.id,
+          type, tierName: tier.name, amount: tier.amount, status, issuedById: librarian.id, issuedAt: at(daysAgo),
+          confirmedById: status === 'paid' ? librarian.id : null, ...extra,
+        },
+      });
+      ids.push(ticket.id);
+    }
+    console.log(`fine      ${email}: phiếu TT-A..E = ${ids.join(', ')} cho 2.5.2`);
+  }
 }
 
 main().catch((err) => {

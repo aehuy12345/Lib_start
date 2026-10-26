@@ -234,7 +234,6 @@ describe('Route /api/fine-tickets (2.5.2)', () => {
   it.each([
     ['get', '/api/fine-tickets/mine'],
     ['post', '/api/fine-tickets/1/pay'],
-    ['get', '/api/fine-tickets/1/receipt'],
   ])('%s %s: không token → 401, nhân viên/Admin → 403', async (method, url) => {
     const { app, fineTicketService } = makeApp();
     expect((await request(app)[method](url)).status).toBe(401);

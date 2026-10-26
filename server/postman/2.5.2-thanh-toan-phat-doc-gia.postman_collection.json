@@ -250,26 +250,21 @@
           }
         },
         {
-          "name": "GET /:id/receipt Admin → 403",
+          "name": "GET /:id/receipt không token → 401 (nhân viên xem được từ 2.5.3)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('403', () => pm.response.to.have.status(403));"
+                  "pm.test('401', () => pm.response.to.have.status(401));"
                 ]
               }
             }
           ],
           "request": {
             "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{adminToken}}"
-              }
-            ],
+            "header": [],
             "url": "{{baseUrl}}/fine-tickets/1/receipt"
           }
         }

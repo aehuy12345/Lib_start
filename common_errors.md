@@ -47,6 +47,8 @@ Tóm tắt các lỗi đã gặp trong quá trình làm và cách sửa. Nhóm t
 - **`getByRole('banner')` pass trên jsdom nhưng không tìm thấy trên trình duyệt** (2.1.3): `<header>` nằm trong `<main>` thì Chrome không gán role banner. → Không dựa vào role banner; dùng `page.locator('header')` (E2E) hoặc `document.querySelector('header')` (unit).
 
 - **`toHaveText('0')` lúc pass lúc fail** (2.4.2, trong spec 2.3.2): khi sách hết, ô Có sẵn hiện `0` kèm nhãn `Hết sách`, nên text đầy đủ là `0Hết sách`; assertion chỉ pass khi đọc DOM trước lúc nhãn hiện. Chạy riêng thì pass, chạy cả bộ thì fail. → So khớp đúng nội dung hiển thị (`/^0\s*Hết sách$/`); khi một spec chỉ lỗi lúc chạy cả bộ, chèn `waitForTimeout` tạm và in `textContent` để xem giá trị thật.
+- **Locator bắt thêm phần tử ngoài ý muốn trong bảng có dòng chi tiết mở rộng** (2.5.3): `getByLabel('Chi tiết phiếu 230')` khớp cả nút `Đóng chi tiết phiếu 230` (so khớp chuỗi con), và `getByRole('row').filter({ hasText })` khớp cả dòng chi tiết đang mở → strict mode violation. → Dùng `{ exact: true }` cho nhãn, lọc dòng theo tên (`getByRole('row', { name: /^Phiếu phạt \d+$/ })`).
+- **Đổi tài khoản giữa một test E2E bị treo ở `fill`** (2.5.3): đang đăng nhập thì `/login` không hiện form. → Trong helper `login`, xóa `localStorage` rồi reload trước khi điền.
 - **Race giữa hai tab trong E2E 2.4.1** (2.4.2): `other.reload()` xong nhưng danh sách chưa tải thì tab kia đã gửi yêu cầu mới, nên tab hai không thấy nút. → Sau khi reload, đợi phần tử cần dùng hiện ra rồi mới thao tác ở tab còn lại.
 
 ## Joi

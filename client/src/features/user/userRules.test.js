@@ -1,5 +1,5 @@
 import {
-  disableBlockedHint, disableConfirmMessage, emptyMessage, nextUserListParams, readUserListParams,
+  disableBlockedHint, disableConfirmMessage, emptyMessage, nextUserListParams, readUserListParams, roleConfirmMessage,
 } from './userRules'
 
 describe('userRules (2.6.1)', () => {
@@ -27,6 +27,18 @@ describe('userRules (2.6.1)', () => {
     expect(disableBlockedHint({ canDisable: false, status: 'disabled' })).toBe('')
     expect(disableBlockedHint({ canDisable: false, status: 'active', isSelf: true })).toBe('Tài khoản của bạn')
     expect(disableBlockedHint({ canDisable: false, status: 'active', isSelf: false })).toBe('Admin cuối cùng đang hoạt động')
+  })
+
+  it('2.6.2: xác nhận đổi vai trò, cảnh báo đơn mượn / phiếu phạt và tài khoản chưa kích hoạt', () => {
+    const user = {
+      name: 'An', email: 'an@example.com', role: 'reader', status: 'active',
+      activeBorrowCount: 0, pendingBorrowCount: 0, unpaidFineCount: 0,
+    }
+    expect(roleConfirmMessage(user, 'admin')).toBe('Đổi vai trò của An (an@example.com) từ Độc giả thành Quản lý viên?')
+    const busy = roleConfirmMessage({ ...user, activeBorrowCount: 1, pendingBorrowCount: 2, unpaidFineCount: 3 }, 'librarian')
+    expect(busy).toContain('Lưu ý: người dùng đang mượn 1 cuốn sách, có 2 yêu cầu mượn chờ duyệt, có 3 phiếu phạt chưa thanh toán xong.')
+    expect(busy).toContain('vẫn giữ nguyên')
+    expect(roleConfirmMessage({ ...user, status: 'disabled' }, 'librarian')).toContain('chỉ có hiệu lực sau khi kích hoạt')
   })
 
   it('edge 3: cảnh báo khi người dùng đang mượn sách', () => {

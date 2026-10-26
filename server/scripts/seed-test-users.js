@@ -56,6 +56,14 @@ const USERS = [
   { email: 'test.um.e2e.active@example.com', name: 'Test Người Dùng E2E Hoạt Động', role: 'reader', status: 'active' },
   { email: 'test.um.e2e.pending@example.com', name: 'Test Người Dùng E2E Chờ', role: 'reader', status: 'pending' },
   { email: 'test.um.e2e.disabled@example.com', name: 'Test Người Dùng E2E Khóa', role: 'librarian', status: 'disabled' },
+  // 2.6.2: Admin đổi vai trò (xem seedRoleChange). reader đang mượn 1 cuốn + 1 đơn chờ duyệt (cảnh báo),
+  // disabled để đổi vai trò tài khoản bị khóa (edge 3). Vai trò được upsert lại mỗi lần seed.
+  { email: 'test.ur.api.reader@example.com', name: 'Test Vai Trò API Độc Giả', role: 'reader', status: 'active' },
+  { email: 'test.ur.api.librarian@example.com', name: 'Test Vai Trò API Nhân Viên', role: 'librarian', status: 'active' },
+  { email: 'test.ur.api.disabled@example.com', name: 'Test Vai Trò API Khóa', role: 'reader', status: 'disabled' },
+  { email: 'test.ur.e2e.reader@example.com', name: 'Test Vai Trò E2E Độc Giả', role: 'reader', status: 'active' },
+  { email: 'test.ur.e2e.librarian@example.com', name: 'Test Vai Trò E2E Nhân Viên', role: 'librarian', status: 'active' },
+  { email: 'test.ur.e2e.disabled@example.com', name: 'Test Vai Trò E2E Khóa', role: 'reader', status: 'disabled' },
 ];
 
 async function main() {
@@ -86,6 +94,7 @@ async function main() {
   await seedFinePayment(prisma);
   await seedFineReview(prisma);
   await seedUserList(prisma);
+  await seedRoleChange(prisma);
   await prisma.$disconnect();
 }
 
@@ -805,6 +814,41 @@ async function seedUserList(prisma) {
     });
   }
   console.log(`user      7 tài khoản test.um.* cho 2.6.1; đã dọn ${logs.count} audit log`);
+}
+
+// 2.6.2: mỗi test.ur.*.reader đang mượn 1 cuốn và có 1 đơn chờ duyệt "Test Sách VT 01" để client cảnh báo
+// khi đổi vai trò. Audit log đổi vai trò đã được seedUserList dọn.
+const CATEGORY_ROLE_CHANGE = 'Test Vai Trò';
+
+async function seedRoleChange(prisma) {
+  const librarian = await prisma.user.findUnique({ where: { email: 'test.librarian@example.com' }, select: { id: true } });
+  const category = await prisma.category.findFirst({ where: { name: CATEGORY_ROLE_CHANGE, deletedAt: null } })
+    ?? await prisma.category.create({ data: { name: CATEGORY_ROLE_CHANGE } });
+  const book = await prisma.book.create({
+    data: {
+      title: 'Test Sách VT 01 Vai Trò', author: 'Tác Giả VT', publishYear: 2023, description: 'Dữ liệu test 2.6.2',
+      categoryId: category.id, totalQuantity: 4, availableQuantity: 2, borrowedQuantity: 2,
+    },
+  });
+  // Mỗi độc giả chỉ có một đơn đang hoạt động cho một cuốn (borrow_orders_active_reader_book_key).
+  const pendingBook = await prisma.book.create({
+    data: {
+      title: 'Test Sách VT 02 Chờ Duyệt', author: 'Tác Giả VT', publishYear: 2023, description: 'Dữ liệu test 2.6.2',
+      categoryId: category.id, totalQuantity: 2, availableQuantity: 2,
+    },
+  });
+  const at = (daysAgo) => new Date(Date.now() - daysAgo * DAY);
+  for (const email of ['test.ur.api.reader@example.com', 'test.ur.e2e.reader@example.com']) {
+    const reader = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+    await prisma.borrowOrder.create({
+      data: {
+        readerId: reader.id, bookId: book.id, status: 'borrowing', processedById: librarian.id,
+        processedAt: at(3), createdAt: at(4), borrowedAt: at(3), dueDate: businessDate(11),
+      },
+    });
+    await prisma.borrowOrder.create({ data: { readerId: reader.id, bookId: pendingBook.id, status: 'pending', createdAt: at(1) } });
+  }
+  console.log('user      6 tài khoản test.ur.* cho 2.6.2');
 }
 
 main().catch((err) => {

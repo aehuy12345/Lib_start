@@ -17,3 +17,9 @@ export async function activateUser(id) {
   const { data } = await api.post(`/users/${encodeURIComponent(id)}/activate`)
   return data
 }
+
+// 2.6.2. 409 kèm `reason`: self, last_admin. Trả về { message, changed, user }.
+export async function changeUserRole(id, role) {
+  const { data } = await api.post(`/users/${encodeURIComponent(id)}/role`, { role })
+  return data
+}

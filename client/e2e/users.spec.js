@@ -46,11 +46,11 @@ test.describe.serial('2.6.1 Danh sách người dùng', () => {
     await expect(page).toHaveURL('/admin/users?q=test+nguoi+dung+e2e')
     await expect(page.getByRole('row')).toHaveCount(4) // header + 3 tài khoản e2e
     await expect(row(page, ACTIVE)).toContainText('Test Người Dùng E2E Hoạt Động')
-    await expect(row(page, ACTIVE)).toContainText('Độc giả')
+    await expect(row(page, ACTIVE).getByRole('combobox', { name: `Vai trò của ${ACTIVE}` })).toHaveValue('reader')
     await expect(row(page, ACTIVE)).toContainText('Kích hoạt')
     await expect(row(page, ACTIVE)).toContainText('Đang mượn 1 cuốn')
     await expect(row(page, PENDING)).toContainText('Chờ xác nhận')
-    await expect(row(page, DISABLED)).toContainText('Nhân viên thư viện')
+    await expect(row(page, DISABLED).getByRole('combobox')).toHaveValue('librarian')
     await expect(row(page, DISABLED)).toContainText('Vô hiệu hóa')
 
     await page.getByRole('button', { name: 'Nhân viên thư viện' }).click()
@@ -69,6 +69,7 @@ test.describe.serial('2.6.1 Danh sách người dùng', () => {
     await expect(self).toContainText('Test Admin (bạn)')
     await expect(self).toContainText('Tài khoản của bạn')
     await expect(self.getByRole('button')).toHaveCount(0)
+    await expect(self.getByRole('combobox')).toHaveCount(0) // 2.6.2: không tự đổi vai trò
   })
 
   test('edge 3, 4: vô hiệu hóa người đang mượn có cảnh báo; người đó bị đăng xuất ở request kế tiếp', async ({ page, browser }) => {
@@ -122,7 +123,7 @@ test.describe.serial('2.6.1 Danh sách người dùng', () => {
 
     await row(page, DISABLED).getByRole('button', { name: `Kích hoạt ${DISABLED}` }).click()
     await expect(row(page, DISABLED).getByRole('button', { name: `Vô hiệu hóa ${DISABLED}` })).toBeVisible()
-    await expect(row(page, DISABLED)).toContainText('Nhân viên thư viện')
+    await expect(row(page, DISABLED).getByRole('combobox')).toHaveValue('librarian')
 
     await login(page, PENDING)
     await expect(page).toHaveURL('/reader')

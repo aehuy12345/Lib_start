@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useAuth } from '../features/auth/AuthContext'
+import StaffDashboard from '../features/dashboard/StaffDashboard'
 
 const TITLES = {
   reader: 'Dashboard độc giả',
@@ -7,7 +8,7 @@ const TITLES = {
   admin: 'Dashboard quản lý',
 }
 
-// Khung dashboard theo vai trò; nội dung thật thêm ở các tính năng sau (vd 2.7.1).
+// Dashboard theo vai trò; Librarian và Admin xem báo cáo tổng quan (2.7.1).
 export default function DashboardPage() {
   const { user, logout } = useAuth()
 
@@ -45,7 +46,9 @@ export default function DashboardPage() {
           </button>
         </div>
       </header>
-      <section className="p-6 text-sm text-slate-600">Xin chào, {user.name}.</section>
+      {user.role === 'reader'
+        ? <section className="p-6 text-sm text-slate-600">Xin chào, {user.name}.</section>
+        : <StaffDashboard />}
     </main>
   )
 }

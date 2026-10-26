@@ -64,6 +64,8 @@ const USERS = [
   { email: 'test.ur.e2e.reader@example.com', name: 'Test Vai Trò E2E Độc Giả', role: 'reader', status: 'active' },
   { email: 'test.ur.e2e.librarian@example.com', name: 'Test Vai Trò E2E Nhân Viên', role: 'librarian', status: 'active' },
   { email: 'test.ur.e2e.disabled@example.com', name: 'Test Vai Trò E2E Khóa', role: 'reader', status: 'disabled' },
+  // 2.7.1: độc giả quá hạn lâu nhất (xem seedDashboard), đứng đầu danh sách nợ quá hạn.
+  { email: 'test.dashboard@example.com', name: 'Test Dashboard Quá Hạn', role: 'reader', status: 'active' },
 ];
 
 async function main() {
@@ -95,6 +97,7 @@ async function main() {
   await seedFineReview(prisma);
   await seedUserList(prisma);
   await seedRoleChange(prisma);
+  await seedDashboard(prisma);
   await prisma.$disconnect();
 }
 
@@ -849,6 +852,39 @@ async function seedRoleChange(prisma) {
     await prisma.borrowOrder.create({ data: { readerId: reader.id, bookId: pendingBook.id, status: 'pending', createdAt: at(1) } });
   }
   console.log('user      6 tài khoản test.ur.* cho 2.6.2');
+}
+
+// 2.7.1: số liệu dashboard là tổng toàn hệ thống nên test chỉ kiểm tra được những dòng chắc chắn đứng đầu.
+// DB 01 (borrow_count 9999) đứng đầu Top 5, DB 02 (9998) đã xóa vẫn đứng thứ 2 (edge 7); test.dashboard
+// quá hạn 45 và 40 ngày nên đứng đầu danh sách nợ quá hạn, và có 1 đơn chờ duyệt tạo hôm nay (DB 04).
+const CATEGORY_DASHBOARD = 'Test Dashboard';
+
+async function seedDashboard(prisma) {
+  const librarian = await prisma.user.findUnique({ where: { email: 'test.librarian@example.com' }, select: { id: true } });
+  const reader = await prisma.user.findUnique({ where: { email: 'test.dashboard@example.com' }, select: { id: true } });
+  const category = await prisma.category.findFirst({ where: { name: CATEGORY_DASHBOARD, deletedAt: null } })
+    ?? await prisma.category.create({ data: { name: CATEGORY_DASHBOARD } });
+  const book = (title, data) => prisma.book.create({
+    data: {
+      title, author: 'Tác Giả DB', publishYear: 2023, description: 'Dữ liệu test 2.7.1', categoryId: category.id,
+      totalQuantity: 2, availableQuantity: 2, ...data,
+    },
+  });
+  const popular = await book('Test Sách DB 01 Phổ Biến', { availableQuantity: 1, borrowedQuantity: 1, borrowCount: 9999 });
+  await book('Test Sách DB 02 Đã Xóa', { borrowCount: 9998, deletedAt: new Date() });
+  const overdue = await book('Test Sách DB 03 Quá Hạn', { availableQuantity: 1, borrowedQuantity: 1, borrowCount: 1 });
+  const today = await book('Test Sách DB 04 Hôm Nay', {});
+  const at = (daysAgo) => new Date(Date.now() - daysAgo * DAY);
+  for (const [bookId, lateDays] of [[popular.id, 45], [overdue.id, 40]]) {
+    await prisma.borrowOrder.create({
+      data: {
+        readerId: reader.id, bookId, status: 'borrowing', processedById: librarian.id, processedAt: at(lateDays + 14),
+        createdAt: at(lateDays + 15), borrowedAt: at(lateDays + 14), dueDate: businessDate(-lateDays),
+      },
+    });
+  }
+  await prisma.borrowOrder.create({ data: { readerId: reader.id, bookId: today.id, status: 'pending' } });
+  console.log('book      4 sách Test Sách DB 0x cho 2.7.1');
 }
 
 main().catch((err) => {

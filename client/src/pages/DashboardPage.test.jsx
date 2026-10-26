@@ -122,6 +122,17 @@ describe('DashboardPage (2.7.1)', () => {
     expect(getBookStats).toHaveBeenCalledTimes(1)
   })
 
+  it('edge 3: quá 10 độc giả quá hạn → liên kết Xem tất cả tới báo cáo Phạt (2.7.2); có liên kết Báo cáo', async () => {
+    mockApis({ overdue: { total: 12, limit: 10, readers: [{
+      id: 5, name: 'An', email: 'an@example.com', maxLateDays: 6, books: [],
+    }] } })
+    setup('admin')
+    const overdue = await card('Độc giả nợ quá hạn')
+    expect(await within(overdue).findByText(/Còn 11 độc giả quá hạn khác/)).toBeInTheDocument()
+    expect(within(overdue).getByRole('link', { name: 'Xem tất cả' })).toHaveAttribute('href', '/admin/reports?type=fines')
+    expect(screen.getByRole('link', { name: 'Báo cáo' })).toHaveAttribute('href', '/admin/reports')
+  })
+
   it('reader không thấy báo cáo và không gọi API', async () => {
     mockApis()
     setup('reader')

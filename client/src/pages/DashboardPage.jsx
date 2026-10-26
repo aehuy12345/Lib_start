@@ -32,6 +32,7 @@ export default function DashboardPage() {
               <Link to={`/${user.role}/borrow-orders`} className="font-medium text-blue-600 hover:underline">Đơn mượn chờ xác nhận</Link>
               <Link to={`/${user.role}/return-requests`} className="font-medium text-blue-600 hover:underline">Quản lý trả sách</Link>
               <Link to={`/${user.role}/fine-tickets`} className="font-medium text-blue-600 hover:underline">Quản lý phạt</Link>
+              <Link to={`/${user.role}/reports`} className="font-medium text-blue-600 hover:underline">Báo cáo</Link>
             </>
           )}
           {user.role === 'admin' && (

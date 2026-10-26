@@ -11,6 +11,12 @@ const ACTIVATE_BLOCKED = {
   already_active: 'Tài khoản đã được kích hoạt, danh sách đã được tải lại',
 };
 
+// 2.6.2: Admin đổi vai trò người dùng.
+const ROLE_BLOCKED = {
+  self: 'Không thể tự đổi vai trò của mình',
+  last_admin: 'Hệ thống phải còn ít nhất một Admin đang hoạt động',
+};
+
 function isActiveAdmin(user) {
   return user.role === 'admin' && user.status === 'active';
 }
@@ -28,6 +34,19 @@ function evaluateActivate(status) {
   return status === 'active' ? 'already_active' : null;
 }
 
+// Vai trò mới trùng vai trò hiện tại được xử lý trước (không thay đổi gì), nên ở đây role khác target.role.
+// Edge 3 [Giả định]: tài khoản Vô hiệu hóa / Chờ xác nhận vẫn đổi được, chỉ có hiệu lực khi kích hoạt.
+function evaluateRoleChange({ actorId, target, role, activeAdminCount }) {
+  if (target.id === actorId) return 'self';
+  if (isActiveAdmin(target) && role !== 'admin' && activeAdminCount <= 1) return 'last_admin';
+  return null;
+}
+
+// Nút đổi vai trò chỉ bị ẩn với chính mình; Admin cuối cùng vẫn được nâng/giữ, server chặn khi hạ cấp.
+function canChangeRole({ actorId, target }) {
+  return target.id !== actorId;
+}
+
 function canDisable(args) {
   return evaluateDisable(args) === null;
 }
@@ -37,5 +56,6 @@ function canActivate(status) {
 }
 
 module.exports = {
-  DISABLE_BLOCKED, ACTIVATE_BLOCKED, isActiveAdmin, evaluateDisable, evaluateActivate, canDisable, canActivate,
+  DISABLE_BLOCKED, ACTIVATE_BLOCKED, ROLE_BLOCKED, isActiveAdmin, evaluateDisable, evaluateActivate,
+  evaluateRoleChange, canDisable, canActivate, canChangeRole,
 };

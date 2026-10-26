@@ -5,17 +5,20 @@ import UsersPage from './UsersPage'
 import { AuthProvider } from '../features/auth/AuthContext'
 import RequireAuth from '../features/auth/RequireAuth'
 import { getMe } from '../features/auth/authApi'
-import { activateUser, disableUser, listUsers } from '../features/user/userApi'
+import { activateUser, changeUserRole, disableUser, listUsers } from '../features/user/userApi'
 
 vi.mock('../features/auth/authApi', () => ({ login: vi.fn(), getMe: vi.fn() }))
-vi.mock('../features/user/userApi', () => ({ listUsers: vi.fn(), disableUser: vi.fn(), activateUser: vi.fn() }))
+vi.mock('../features/user/userApi', () => ({
+  listUsers: vi.fn(), disableUser: vi.fn(), activateUser: vi.fn(), changeUserRole: vi.fn(),
+}))
 
 const person = (id, patch) => ({
   id, email: `u${id}@example.com`, name: `Người ${id}`, role: 'reader', status: 'active',
-  createdAt: '2026-10-20T03:00:00Z', activeBorrowCount: 0, isSelf: false, canDisable: true, canActivate: false, ...patch,
+  createdAt: '2026-10-20T03:00:00Z', activeBorrowCount: 0, pendingBorrowCount: 0, unpaidFineCount: 0, isSelf: false,
+  canDisable: true, canActivate: false, canChangeRole: true, ...patch,
 })
 const USERS = [
-  person(3, { email: 'a@example.com', name: 'Admin', role: 'admin', isSelf: true, canDisable: false }),
+  person(3, { email: 'a@example.com', name: 'Admin', role: 'admin', isSelf: true, canDisable: false, canChangeRole: false }),
   person(5, { name: 'Nguyễn An', activeBorrowCount: 2 }),
   person(6, { status: 'pending', canActivate: true }),
   person(7, { role: 'librarian', status: 'disabled', canDisable: false, canActivate: true }),
@@ -58,12 +61,12 @@ describe('UsersPage (2.6.1)', () => {
     await setup()
     const an = await screen.findByRole('row', { name: 'Người dùng u5@example.com' })
     expect(within(an).getByText('Nguyễn An')).toBeInTheDocument()
-    expect(within(an).getByText('Độc giả')).toBeInTheDocument()
+    expect(within(an).getByRole('combobox', { name: 'Vai trò của u5@example.com' })).toHaveDisplayValue('Độc giả')
     expect(within(an).getByText('20/10/2026')).toBeInTheDocument()
     expect(within(an).getByText('Kích hoạt')).toBeInTheDocument()
     expect(within(an).getByText('Đang mượn 2 cuốn')).toBeInTheDocument()
     expect(within(row('u6@example.com')).getByText('Chờ xác nhận')).toBeInTheDocument()
-    expect(within(row('u7@example.com')).getByText('Nhân viên thư viện')).toBeInTheDocument()
+    expect(within(row('u7@example.com')).getByRole('combobox')).toHaveDisplayValue('Nhân viên thư viện')
     expect(listUsers).toHaveBeenCalledWith({ role: 'all', q: '', page: 1 })
   })
 
@@ -137,5 +140,53 @@ describe('UsersPage (2.6.1)', () => {
     await setup({ role: 'librarian' })
     expect(await screen.findByText('Librarian dashboard')).toBeInTheDocument()
     expect(listUsers).not.toHaveBeenCalled()
+  })
+})
+
+describe('UsersPage (2.6.2 Gán vai trò)', () => {
+  const select = (email) => screen.findByRole('combobox', { name: `Vai trò của ${email}` })
+
+  it('chính mình không đổi được vai trò, chỉ hiện nhãn', async () => {
+    await setup()
+    const self = await screen.findByRole('row', { name: 'Người dùng a@example.com' })
+    expect(within(self).queryByRole('combobox')).not.toBeInTheDocument()
+    expect(within(self).getByText('Quản lý viên')).toBeInTheDocument()
+  })
+
+  it('cảnh báo khi người dùng còn đơn mượn, phiếu phạt; Hủy thì không gọi API và giữ vai trò cũ', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const { user } = await setup({ users: [person(5, { name: 'Nguyễn An', activeBorrowCount: 2, unpaidFineCount: 1 })] })
+    await user.selectOptions(await select('u5@example.com'), 'librarian')
+    const message = confirm.mock.calls[0][0]
+    expect(message).toContain('từ Độc giả thành Nhân viên thư viện')
+    expect(message).toContain('đang mượn 2 cuốn sách, có 1 phiếu phạt chưa thanh toán xong')
+    expect(changeUserRole).not.toHaveBeenCalled()
+    expect(await select('u5@example.com')).toHaveDisplayValue('Độc giả')
+  })
+
+  it('đồng ý → gọi API, thông báo thành công và tải lại', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    changeUserRole.mockResolvedValue({ message: 'Đã đổi vai trò', changed: true, user: person(7, { role: 'admin' }) })
+    const { user } = await setup()
+    await user.selectOptions(await select('u7@example.com'), 'admin')
+    expect(changeUserRole).toHaveBeenCalledWith(7, 'admin')
+    expect(await screen.findByRole('status')).toHaveTextContent('Đã đổi vai trò: Người 7 (u7@example.com).')
+    await waitFor(() => expect(listUsers).toHaveBeenCalledTimes(2))
+  })
+
+  it('edge 3: tài khoản chưa kích hoạt được nhắc vai trò chỉ có hiệu lực khi kích hoạt', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const { user } = await setup()
+    await user.selectOptions(await select('u6@example.com'), 'admin')
+    expect(confirm.mock.calls[0][0]).toContain('chỉ có hiệu lực sau khi kích hoạt')
+  })
+
+  it('server chặn (409 last_admin) → báo lỗi và tải lại danh sách', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    changeUserRole.mockRejectedValue(apiError(409, 'Hệ thống phải còn ít nhất một Admin đang hoạt động', { reason: 'last_admin' }))
+    const { user } = await setup({ users: [person(9, { role: 'admin', canDisable: false })] })
+    await user.selectOptions(await select('u9@example.com'), 'reader')
+    expect(await screen.findByRole('alert')).toHaveTextContent('ít nhất một Admin')
+    await waitFor(() => expect(listUsers).toHaveBeenCalledTimes(2))
   })
 })

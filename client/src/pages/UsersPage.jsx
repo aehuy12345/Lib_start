@@ -5,10 +5,10 @@ import { useAuth } from '../features/auth/AuthContext'
 import { dashboardPath } from '../features/auth/session'
 import { formatDate } from '../features/book/bookDetail'
 import Pagination from '../features/book/Pagination'
-import { activateUser, disableUser, listUsers } from '../features/user/userApi'
+import { activateUser, changeUserRole, disableUser, listUsers } from '../features/user/userApi'
 import {
-  ROLE_FILTERS, ROLE_LABELS, SEARCH_MAX, USER_STATUS_LABELS,
-  disableBlockedHint, disableConfirmMessage, emptyMessage, nextUserListParams, readUserListParams,
+  ROLES, ROLE_FILTERS, ROLE_LABELS, SEARCH_MAX, USER_STATUS_LABELS,
+  disableBlockedHint, disableConfirmMessage, emptyMessage, nextUserListParams, readUserListParams, roleConfirmMessage,
 } from '../features/user/userRules'
 
 const BUTTON_CLASS = 'rounded-md px-3 py-1.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50'
@@ -19,7 +19,7 @@ const STATUS_CLASS = {
 }
 const COLUMNS = ['Email', 'Tên', 'Vai trò', 'Ngày tham gia', 'Trạng thái', 'Thao tác']
 
-// 2.6.1 Danh sách người dùng (Admin). Bộ lọc vai trò, tìm kiếm, trang nằm trên URL.
+// 2.6.1 Danh sách người dùng (Admin). Bộ lọc vai trò, tìm kiếm, trang nằm trên URL. 2.6.2: đổi vai trò ở cột Vai trò.
 export default function UsersPage() {
   const { user: me } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -72,6 +72,12 @@ export default function UsersPage() {
   const onDisable = (target) => {
     if (!window.confirm(disableConfirmMessage(target))) return
     run(target, disableUser)
+  }
+
+  // 2.6.2: select luôn hiện vai trò hiện tại (controlled), nên Hủy hoặc lỗi thì tự quay về giá trị cũ.
+  const onChangeRole = (target, role) => {
+    if (role === target.role || !window.confirm(roleConfirmMessage(target, role))) return
+    run(target, (id) => changeUserRole(id, role))
   }
 
   const users = data?.users ?? []
@@ -149,7 +155,19 @@ export default function UsersPage() {
                             <div className="text-slate-600">Đang mượn {u.activeBorrowCount} cuốn</div>
                           )}
                         </td>
-                        <td className="px-4 py-2 text-slate-700">{ROLE_LABELS[u.role]}</td>
+                        <td className="px-4 py-2 text-slate-700">
+                          {u.canChangeRole ? (
+                            <select
+                              aria-label={`Vai trò của ${u.email}`}
+                              value={u.role}
+                              onChange={(e) => onChangeRole(u, e.target.value)}
+                              disabled={busyId === u.id}
+                              className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+                            >
+                              {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+                            </select>
+                          ) : ROLE_LABELS[u.role]}
+                        </td>
                         <td className="px-4 py-2 text-slate-700">{formatDate(u.createdAt)}</td>
                         <td className="px-4 py-2">
                           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASS[u.status]}`}>

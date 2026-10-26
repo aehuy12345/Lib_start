@@ -53,6 +53,7 @@ describe('Quy tắc 2.6.1', () => {
 
 const ROW = {
   id: 5, email: 'an@example.com', name: 'An', role: 'reader', status: 'active', createdAt: JOINED, activeBorrowCount: 2,
+  pendingBorrowCount: 1, unpaidFineCount: 3,
 };
 
 // Ghép lại câu SQL mà $queryRaw nhận để kiểm tra điều kiện và tham số.
@@ -75,7 +76,8 @@ describe('userService.listUsers', () => {
     const result = await service.listUsers(3, { role: 'all', q: '', page: 1 });
     expect(result.users).toEqual([{
       id: 5, email: 'an@example.com', name: 'An', role: 'reader', status: 'active', createdAt: JOINED,
-      activeBorrowCount: 2, isSelf: false, canDisable: true, canActivate: false,
+      activeBorrowCount: 2, pendingBorrowCount: 1, unpaidFineCount: 3, isSelf: false, canDisable: true,
+      canActivate: false, canChangeRole: true,
     }]);
     expect(result.pagination).toEqual({ page: 1, pageSize: 10, total: 1, totalPages: 1 });
     const list = sqlOf(prisma.$queryRaw.mock.calls[1]);
@@ -114,7 +116,7 @@ describe('userService.listUsers', () => {
     const self = { ...ROW, id: 3, role: 'admin' };
     const { service } = makeService([self], 1, 1);
     const [user] = (await service.listUsers(3, {})).users;
-    expect(user).toMatchObject({ isSelf: true, canDisable: false });
+    expect(user).toMatchObject({ isSelf: true, canDisable: false, canChangeRole: false });
   });
 });
 

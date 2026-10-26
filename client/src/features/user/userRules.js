@@ -9,6 +9,8 @@ const FILTER_VALUES = ROLE_FILTERS.map((f) => f.value)
 export const SEARCH_MAX = 100
 
 export const ROLE_LABELS = { reader: 'Độc giả', librarian: 'Nhân viên thư viện', admin: 'Quản lý viên' }
+// 2.6.2: khớp changeRoleSchema ở server.
+export const ROLES = ['reader', 'librarian', 'admin']
 export const USER_STATUS_LABELS = { pending: 'Chờ xác nhận', active: 'Kích hoạt', disabled: 'Vô hiệu hóa' }
 
 // Giá trị lạ trên URL được thay bằng mặc định, giống server.
@@ -37,6 +39,24 @@ export function disableBlockedHint(user) {
   if (user.canDisable || user.status === 'disabled') return ''
   if (user.isSelf) return 'Tài khoản của bạn'
   return 'Admin cuối cùng đang hoạt động'
+}
+
+// 2.6.2: cảnh báo khi người dùng còn đơn mượn hoặc phiếu phạt; dữ liệu cũ giữ nguyên. Edge 3: tài khoản
+// chưa kích hoạt thì vai trò mới chỉ có hiệu lực khi được kích hoạt.
+export function roleConfirmMessage(user, role) {
+  const lines = [`Đổi vai trò của ${user.name} (${user.email}) từ ${ROLE_LABELS[user.role]} thành ${ROLE_LABELS[role]}?`]
+  const open = [
+    user.activeBorrowCount && `đang mượn ${user.activeBorrowCount} cuốn sách`,
+    user.pendingBorrowCount && `có ${user.pendingBorrowCount} yêu cầu mượn chờ duyệt`,
+    user.unpaidFineCount && `có ${user.unpaidFineCount} phiếu phạt chưa thanh toán xong`,
+  ].filter(Boolean)
+  if (open.length) {
+    lines.push(`Lưu ý: người dùng ${open.join(', ')}. Dữ liệu này vẫn giữ nguyên sau khi đổi vai trò.`)
+  }
+  if (user.status !== 'active') {
+    lines.push('Tài khoản chưa được kích hoạt nên vai trò mới chỉ có hiệu lực sau khi kích hoạt.')
+  }
+  return lines.join('\n\n')
 }
 
 // Edge 3: vẫn cho vô hiệu hóa người đang mượn sách nhưng cảnh báo trước.

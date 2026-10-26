@@ -1,0 +1,2012 @@
+{
+  "info": {
+    "name": "Lib_start - 2.5.1 Quản lý mức phạt",
+    "description": "API test cho 2.5.1 Quản lý mức phạt (design/flows/2.5.1-quan-ly-muc-phat.md). Bản gốc trong repo: server/postman/2.5.1-quan-ly-muc-phat.postman_collection.json. Chạy `node scripts/seed-test-users.js` trước (tạo mức phạt \"Test MP Sửa/Xóa/Dùng API\", mức Dùng có 1 phiếu phạt của test.tiered). Chạy theo thứ tự.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.collectionVariables.get('suffix')) pm.collectionVariables.set('suffix', String(Date.now()).slice(-6));"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000/api"
+    },
+    {
+      "key": "password",
+      "value": "Test@1234"
+    }
+  ],
+  "item": [
+    {
+      "name": "Đăng nhập",
+      "item": [
+        {
+          "name": "reader đăng nhập",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('readerToken', pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test.reader@example.com\",\n  \"password\": \"{{password}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "librarian đăng nhập",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('librarianToken', pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test.librarian@example.com\",\n  \"password\": \"{{password}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "admin đăng nhập",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('adminToken', pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test.admin@example.com\",\n  \"password\": \"{{password}}\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Danh sách mức phạt",
+      "item": [
+        {
+          "name": "admin xem bảng mức phạt → 200, lấy id dữ liệu seed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const tiers = pm.response.json().tiers;",
+                  "const find = (name) => tiers.find((t) => t.name === name);",
+                  "pm.test('có đủ mức seed', () => [\"Test MP Sửa API\",\"Test MP Xóa API\",\"Test MP Dùng API\"].forEach((n) => pm.expect(find(n), n).to.be.an('object')));",
+                  "pm.test('mỗi dòng có id, name, type, amount, ticketCount, updatedAt', () => tiers.forEach((t) => pm.expect(t).to.include.keys('id', 'name', 'type', 'amount', 'ticketCount', 'updatedAt')));",
+                  "pm.test('mức đã ẩn không hiện', () => pm.expect(find('Test Hư Hỏng Ẩn')).to.be.undefined);",
+                  "pm.test('sắp theo loại: Trả muộn → Hư hỏng → Mất', () => { const order = ['late', 'damaged', 'lost']; const idx = tiers.map((t) => order.indexOf(t.type)); pm.expect(idx).to.eql([...idx].sort((a, b) => a - b)); });",
+                  "pm.test('cùng loại sắp theo số tiền tăng dần', () => { for (let i = 1; i < tiers.length; i++) if (tiers[i].type === tiers[i - 1].type) pm.expect(tiers[i].amount).to.be.at.least(tiers[i - 1].amount); });",
+                  "pm.test('Dùng API có 1 phiếu, Sửa API chưa có phiếu', () => { pm.expect(find('Test MP Dùng API').ticketCount).to.eql(1); pm.expect(find('Test MP Sửa API').ticketCount).to.eql(0); });",
+                  "pm.test('không có trường Ngày phạt (README điểm 5)', () => tiers.forEach((t) => pm.expect(t).to.not.have.any.keys('issuedAt', 'date')));",
+                  "pm.collectionVariables.set('editId', find('Test MP Sửa API').id);",
+                  "pm.collectionVariables.set('editUpdatedAt', find('Test MP Sửa API').updatedAt);",
+                  "pm.collectionVariables.set('deleteId', find('Test MP Xóa API').id);",
+                  "pm.collectionVariables.set('usedId', find('Test MP Dùng API').id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Phân quyền (edge 6)",
+      "item": [
+        {
+          "name": "không token GET → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers"
+              ]
+            }
+          }
+        },
+        {
+          "name": "không token POST → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test MP Hợp Lệ\",\n  \"type\": \"late\",\n  \"amount\": 1000\n}"
+            }
+          }
+        },
+        {
+          "name": "reader GET → 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{readerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers"
+              ]
+            }
+          }
+        },
+        {
+          "name": "librarian GET → 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers"
+              ]
+            }
+          }
+        },
+        {
+          "name": "librarian POST → 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test MP Hợp Lệ\",\n  \"type\": \"late\",\n  \"amount\": 1000\n}"
+            }
+          }
+        },
+        {
+          "name": "librarian PATCH → 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers/{{editId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers",
+                "{{editId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test MP Hack\",\n  \"amount\": 1,\n  \"updatedAt\": \"{{editUpdatedAt}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "librarian DELETE → 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers/{{deleteId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers",
+                "{{deleteId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "librarian vẫn lấy được /options để chọn ở 2.4.2 → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('nhóm theo loại', () => pm.expect(pm.response.json().tiers).to.have.keys('late', 'damaged', 'lost'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers/options",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers",
+                "options"
+              ]
+            }
+          }
+        },
+        {
+          "name": "reader /options → 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{readerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers/options",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers",
+                "options"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Thêm mức phạt",
+      "item": [
+        {
+          "name": "thiếu tên → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('errors.name = Tên mức phạt không được để trống', () => pm.expect(pm.response.json().errors.name).to.eql(\"Tên mức phạt không được để trống\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"late\",\n  \"amount\": 1000\n}"
+            }
+          }
+        },
+        {
+          "name": "tên toàn khoảng trắng → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('errors.name = Tên mức phạt không được để trống', () => pm.expect(pm.response.json().errors.name).to.eql(\"Tên mức phạt không được để trống\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"    \",\n  \"type\": \"late\",\n  \"amount\": 1000\n}"
+            }
+          }
+        },
+        {
+          "name": "tên 26 ký tự → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('errors.name = Tên mức phạt tối đa 25 ký tự', () => pm.expect(pm.response.json().errors.name).to.eql(\"Tên mức phạt tối đa 25 ký tự\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test MP xxxxxxxxxxxxxxxxxx\",\n  \"type\": \"late\",\n  \"amount\": 1000\n}"
+            }
+          }
+        },
+        {
+          "name": "thiếu loại → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('errors.type = Vui lòng chọn loại mức phạt', () => pm.expect(pm.response.json().errors.type).to.eql(\"Vui lòng chọn loại mức phạt\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test MP Hợp Lệ\",\n  \"amount\": 1000\n}"
+            }
+          }
+        },
+        {
+          "name": "loại sai → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('errors.type = Loại mức phạt không hợp lệ', () => pm.expect(pm.response.json().errors.type).to.eql(\"Loại mức phạt không hợp lệ\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test MP Hợp Lệ\",\n  \"type\": \"other\",\n  \"amount\": 1000\n}"
+            }
+          }
+        },
+        {
+          "name": "thiếu số tiền → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('errors.amount = Số tiền không được để trống', () => pm.expect(pm.response.json().errors.amount).to.eql(\"Số tiền không được để trống\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test MP Hợp Lệ\",\n  \"type\": \"late\"\n}"
+            }
+          }
+        },
+        {
+          "name": "số tiền 0 (edge 1) → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('errors.amount = Số tiền phải lớn hơn 0', () => pm.expect(pm.response.json().errors.amount).to.eql(\"Số tiền phải lớn hơn 0\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test MP Hợp Lệ\",\n  \"type\": \"late\",\n  \"amount\": 0\n}"
+            }
+          }
+        },
+        {
+          "name": "số tiền âm (edge 1) → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('errors.amount = Số tiền phải lớn hơn 0', () => pm.expect(pm.response.json().errors.amount).to.eql(\"Số tiền phải lớn hơn 0\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test MP Hợp Lệ\",\n  \"type\": \"late\",\n  \"amount\": -5000\n}"
+            }
+          }
+        },
+        {
+          "name": "số tiền là chữ (edge 1) → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('errors.amount = Số tiền phải là số', () => pm.expect(pm.response.json().errors.amount).to.eql(\"Số tiền phải là số\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test MP Hợp Lệ\",\n  \"type\": \"late\",\n  \"amount\": \"abc\"\n}"
+            }
+          }
+        },
+        {
+          "name": "số tiền 10 chữ số (edge 1) → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('errors.amount = Số tiền tối đa 999.999.999 đ', () => pm.expect(pm.response.json().errors.amount).to.eql(\"Số tiền tối đa 999.999.999 đ\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test MP Hợp Lệ\",\n  \"type\": \"late\",\n  \"amount\": 1000000000\n}"
+            }
+          }
+        },
+        {
+          "name": "số tiền thập phân (edge 2) → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('errors.amount = Số tiền phải là số nguyên (VND)', () => pm.expect(pm.response.json().errors.amount).to.eql(\"Số tiền phải là số nguyên (VND)\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test MP Hợp Lệ\",\n  \"type\": \"late\",\n  \"amount\": 1500.5\n}"
+            }
+          }
+        },
+        {
+          "name": "body rỗng → 400 báo cả 3 field",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('3 lỗi', () => pm.expect(pm.response.json().errors).to.have.keys('name', 'type', 'amount'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "trùng tên khác hoa thường + khoảng trắng → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('errors.name = Tên mức phạt đã tồn tại', () => pm.expect(pm.response.json().errors.name).to.eql(\"Tên mức phạt đã tồn tại\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"  test mp SỬA api  \",\n  \"type\": \"damaged\",\n  \"amount\": 1000\n}"
+            }
+          }
+        },
+        {
+          "name": "hợp lệ → 201, tên trim, field lạ (Ngày phạt, isActive) bị bỏ",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.test('message', () => pm.expect(pm.response.json().message).to.eql(\"Thêm mức phạt thành công\"));",
+                  "const tier = pm.response.json().tier;",
+                  "pm.test('dữ liệu trả về', () => { pm.expect(tier.name).to.eql('Test MP Mới ' + pm.collectionVariables.get('suffix')); pm.expect(tier.type).to.eql('damaged'); pm.expect(tier.amount).to.eql(45000); pm.expect(tier.ticketCount).to.eql(0); });",
+                  "pm.collectionVariables.set('newId', tier.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"  Test MP Mới {{suffix}}  \",\n  \"type\": \"damaged\",\n  \"amount\": 45000,\n  \"issuedAt\": \"2026-10-26\",\n  \"isActive\": false\n}"
+            }
+          }
+        },
+        {
+          "name": "biên: tên 25 ký tự, số tiền 999.999.999 dạng chuỗi → 201",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.test('25 ký tự, số tiền là số', () => { const t = pm.response.json().tier; pm.expect(t.name.length).to.eql(25); pm.expect(t.amount).to.eql(999999999); });",
+                  "pm.collectionVariables.set('boundaryId', pm.response.json().tier.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test MP Biên {{suffix}}xxxxxx\",\n  \"type\": \"lost\",\n  \"amount\": \"999999999\"\n}"
+            }
+          }
+        },
+        {
+          "name": "mức mới hiện trong bảng và trong /options",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('có trong nhóm damaged', () => pm.expect(pm.response.json().tiers.damaged.map((t) => t.id)).to.include(Number(pm.collectionVariables.get('newId'))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers/options",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers",
+                "options"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sửa trực tiếp trên bảng",
+      "item": [
+        {
+          "name": "thiếu updatedAt → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('errors.updatedAt = Thiếu thời điểm cập nhật, vui lòng tải lại bảng', () => pm.expect(pm.response.json().errors.updatedAt).to.eql(\"Thiếu thời điểm cập nhật, vui lòng tải lại bảng\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers/{{editId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers",
+                "{{editId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test MP Sửa API\",\n  \"amount\": 5500\n}"
+            }
+          }
+        },
+        {
+          "name": "số tiền 0 → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('errors.amount = Số tiền phải lớn hơn 0', () => pm.expect(pm.response.json().errors.amount).to.eql(\"Số tiền phải lớn hơn 0\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers/{{editId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers",
+                "{{editId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test MP Sửa API\",\n  \"amount\": 0,\n  \"updatedAt\": \"{{editUpdatedAt}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "tên rỗng → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('errors.name = Tên mức phạt không được để trống', () => pm.expect(pm.response.json().errors.name).to.eql(\"Tên mức phạt không được để trống\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers/{{editId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers",
+                "{{editId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\",\n  \"amount\": 5500,\n  \"updatedAt\": \"{{editUpdatedAt}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "trùng tên mức khác → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('errors.name = Tên mức phạt đã tồn tại', () => pm.expect(pm.response.json().errors.name).to.eql(\"Tên mức phạt đã tồn tại\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers/{{editId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers",
+                "{{editId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"TEST MP XÓA API\",\n  \"amount\": 5500,\n  \"updatedAt\": \"{{editUpdatedAt}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "hợp lệ → 200, đổi tên + số tiền, loại giữ nguyên, updatedAt mới",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('message', () => pm.expect(pm.response.json().message).to.eql(\"Cập nhật mức phạt thành công\"));",
+                  "const tier = pm.response.json().tier;",
+                  "pm.test('đã cập nhật', () => { pm.expect(tier.name).to.eql('Test MP Sửa API Mới'); pm.expect(tier.amount).to.eql(5500); pm.expect(tier.type).to.eql('late'); });",
+                  "pm.test('updatedAt đổi', () => pm.expect(tier.updatedAt).to.not.eql(pm.collectionVariables.get('editUpdatedAt')));",
+                  "pm.collectionVariables.set('freshUpdatedAt', tier.updatedAt);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers/{{editId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers",
+                "{{editId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \" Test MP Sửa API Mới \",\n  \"amount\": 5500,\n  \"type\": \"lost\",\n  \"updatedAt\": \"{{editUpdatedAt}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "edge 7: gửi lại updatedAt cũ (Admin khác đã sửa) → 409 stale",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('message', () => pm.expect(pm.response.json().message).to.eql(\"Mức phạt đã được người khác sửa, bảng đã được tải lại\"));",
+                  "pm.test('reason stale', () => pm.expect(pm.response.json().reason).to.eql('stale'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers/{{editId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers",
+                "{{editId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test MP Ghi Đè\",\n  \"amount\": 9999,\n  \"updatedAt\": \"{{editUpdatedAt}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "dữ liệu không bị ghi đè sau 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('vẫn là bản đã sửa', () => { const t = pm.response.json().tiers.find((x) => x.id === Number(pm.collectionVariables.get('editId'))); pm.expect(t.name).to.eql('Test MP Sửa API Mới'); pm.expect(t.amount).to.eql(5500); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers"
+              ]
+            }
+          }
+        },
+        {
+          "name": "dùng updatedAt mới → 200 (trả tên cũ)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers/{{editId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers",
+                "{{editId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test MP Sửa API\",\n  \"amount\": 5000,\n  \"updatedAt\": \"{{freshUpdatedAt}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "id không phải số → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));",
+                  "pm.test('message', () => pm.expect(pm.response.json().message).to.eql(\"Không tìm thấy mức phạt\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers/abc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers",
+                "abc"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"X\",\n  \"amount\": 1,\n  \"updatedAt\": \"{{editUpdatedAt}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "id không tồn tại → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers/2147483647",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers",
+                "2147483647"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"X\",\n  \"amount\": 1,\n  \"updatedAt\": \"{{editUpdatedAt}}\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Xóa mức phạt",
+      "item": [
+        {
+          "name": "chưa dùng → xóa hẳn, hidden false",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('message', () => pm.expect(pm.response.json().message).to.eql(\"Đã xóa mức phạt\"));",
+                  "pm.test('hidden false', () => pm.expect(pm.response.json().hidden).to.eql(false));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers/{{deleteId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers",
+                "{{deleteId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "xóa lại → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers/{{deleteId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers",
+                "{{deleteId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "edge 4: đã có phiếu phạt → chỉ ẩn, hidden true",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('message', () => pm.expect(pm.response.json().message).to.eql(\"Mức phạt đã được dùng trong phiếu phạt nên chỉ được ẩn; phiếu phạt cũ giữ nguyên\"));",
+                  "pm.test('hidden true', () => pm.expect(pm.response.json().hidden).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers/{{usedId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers",
+                "{{usedId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "mức đã ẩn không còn trong bảng",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('không có usedId, deleteId', () => { const ids = pm.response.json().tiers.map((t) => t.id); pm.expect(ids).to.not.include(Number(pm.collectionVariables.get('usedId'))); pm.expect(ids).to.not.include(Number(pm.collectionVariables.get('deleteId'))); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers"
+              ]
+            }
+          }
+        },
+        {
+          "name": "mức đã ẩn không chọn được ở 2.4.2 (/options)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('không có trong nhóm lost', () => pm.expect(pm.response.json().tiers.lost.map((t) => t.id)).to.not.include(Number(pm.collectionVariables.get('usedId'))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers/options",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers",
+                "options"
+              ]
+            }
+          }
+        },
+        {
+          "name": "sửa mức đã ẩn → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers/{{usedId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers",
+                "{{usedId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test MP Dùng API\",\n  \"amount\": 1,\n  \"updatedAt\": \"{{editUpdatedAt}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "xóa mức đã ẩn → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers/{{usedId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers",
+                "{{usedId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "tên của mức đã ẩn được dùng lại → 201",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('reuseId', pm.response.json().tier.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test MP Dùng API\",\n  \"type\": \"lost\",\n  \"amount\": 220000\n}"
+            }
+          }
+        },
+        {
+          "name": "dọn: xóa mức vừa tạo lại tên",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('hidden false', () => pm.expect(pm.response.json().hidden).to.eql(false));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers/{{reuseId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers",
+                "{{reuseId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "dọn: xóa mức mới",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers/{{newId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers",
+                "{{newId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "dọn: xóa mức biên",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers/{{boundaryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers",
+                "{{boundaryId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "id không hợp lệ → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fine-tiers/0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fine-tiers",
+                "0"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

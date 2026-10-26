@@ -36,6 +36,8 @@ const USERS = [
   // 2.4.2: nhân viên xác nhận trả cho Postman (test.giver) và E2E (test.handover), xem seedReturnConfirm.
   { email: 'test.giver@example.com', name: 'Test Giver', role: 'reader', status: 'active' },
   { email: 'test.handover@example.com', name: 'Test Handover', role: 'reader', status: 'active' },
+  // 2.5.1: có phiếu phạt đã thanh toán dùng mức "Test MP Dùng ..." (xem seedFineTiers).
+  { email: 'test.tiered@example.com', name: 'Test Tiered', role: 'reader', status: 'active' },
 ];
 
 async function main() {
@@ -62,6 +64,7 @@ async function main() {
   await seedBorrowHistory(prisma);
   await seedReturnRequest(prisma);
   await seedReturnConfirm(prisma);
+  await seedFineTiers(prisma);
   await prisma.$disconnect();
 }
 
@@ -153,7 +156,10 @@ async function cleanTestBorrows(prisma) {
   const fines = await prisma.fineTicket.deleteMany({ where: { reader: readers } });
   await prisma.returnRequest.deleteMany({ where: { borrowOrder: { reader: readers } } });
   const orders = await prisma.borrowOrder.deleteMany({ where: { reader: readers } });
-  await prisma.fineTier.deleteMany({ where: { name: { startsWith: 'Test ' }, fineTickets: { none: {} } } });
+  // Không phân biệt hoa thường: test trùng tên (2.5.1) có thể tạo "test mp ...".
+  await prisma.fineTier.deleteMany({
+    where: { name: { startsWith: 'Test ', mode: 'insensitive' }, fineTickets: { none: {} } },
+  });
   console.log(`borrow    đã dọn ${orders.count} đơn mượn, ${fines.count} phiếu phạt của tài khoản test`);
 }
 
@@ -542,6 +548,57 @@ async function seedReturnConfirm(prisma) {
     }
   }
   console.log(`category  "${CATEGORY_RETURN_CONFIRM}" (id ${category.id}) cho 2.4.2: ${books.map((b) => `${b.title.slice(10, 15)} ${b.id}`).join(', ')}`);
+}
+
+// 2.5.1: mức phạt "Test MP ..." (tên ≤ 25 ký tự). Mỗi cặp có bản API (Postman) và E2E:
+//   Sửa  → chưa dùng, test sửa tên/số tiền và khóa lạc quan (edge 7)
+//   Xóa  → chưa dùng, xóa hẳn
+//   Dùng → có 1 phiếu phạt đã thanh toán của test.tiered, xóa thì chỉ ẩn (edge 4)
+// Phiếu gắn với đơn đã trả (tình trạng Mất) của sách MP 01 trong thể loại "Test Mức Phạt".
+const CATEGORY_FINE_TIER = 'Test Mức Phạt';
+
+async function seedFineTiers(prisma) {
+  const reader = await prisma.user.findUnique({ where: { email: 'test.tiered@example.com' }, select: { id: true } });
+  const librarian = await prisma.user.findUnique({ where: { email: 'test.librarian@example.com' }, select: { id: true } });
+  const category = await prisma.category.findFirst({ where: { name: CATEGORY_FINE_TIER, deletedAt: null } })
+    ?? await prisma.category.create({ data: { name: CATEGORY_FINE_TIER } });
+  const book = await prisma.book.create({
+    data: {
+      title: 'Test Sách MP 01 Mức Phạt', author: 'Tác Giả MP', publishYear: 2023, description: 'Dữ liệu test 2.5.1',
+      categoryId: category.id, totalQuantity: 3, availableQuantity: 3,
+    },
+  });
+  const created = [];
+  for (const [name, type, amount] of [
+    ['Test MP Sửa API', 'late', 5000], ['Test MP Sửa E2E', 'late', 6000],
+    ['Test MP Xóa API', 'damaged', 7000], ['Test MP Xóa E2E', 'damaged', 8000],
+    ['Test MP Dùng API', 'lost', 200000], ['Test MP Dùng E2E', 'lost', 210000],
+  ]) {
+    created.push(await prisma.fineTier.create({ data: { name, type, amount } }));
+  }
+  const at = (daysAgo) => new Date(Date.now() - daysAgo * DAY);
+  for (const tier of created.filter((t) => t.name.startsWith('Test MP Dùng'))) {
+    const order = await prisma.borrowOrder.create({
+      data: {
+        readerId: reader.id, bookId: book.id, status: 'returned', processedById: librarian.id, processedAt: at(40),
+        createdAt: at(41), borrowedAt: at(40), dueDate: businessDate(-26), returnedAt: at(30),
+      },
+    });
+    const returnRequest = await prisma.returnRequest.create({
+      data: {
+        borrowOrderId: order.id, status: 'confirmed', requestedById: reader.id, processedById: librarian.id,
+        processedAt: at(30), condition: 'lost', conditionNote: 'Dữ liệu test 2.5.1', lateDays: 0,
+      },
+    });
+    await prisma.fineTicket.create({
+      data: {
+        readerId: reader.id, borrowOrderId: order.id, returnRequestId: returnRequest.id, fineTierId: tier.id,
+        type: 'lost', tierName: tier.name, amount: tier.amount, status: 'paid', issuedById: librarian.id,
+        issuedAt: at(30), submittedAt: at(29), confirmedById: librarian.id, confirmedAt: at(28),
+      },
+    });
+  }
+  console.log(`fine-tier ${created.map((t) => `"${t.name}" ${t.id}`).join(', ')} cho 2.5.1`);
 }
 
 main().catch((err) => {

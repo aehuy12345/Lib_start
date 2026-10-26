@@ -1,3 +1,4 @@
+const { Prisma } = require('@prisma/client');
 const { HttpError } = require('../../lib/httpError');
 const { businessToday, toDateString } = require('../../lib/businessDate');
 const { ORDER_NOT_FOUND, ALREADY_PROCESSED } = require('../borrow/borrow.service');
@@ -140,6 +141,8 @@ function createReturnService({ prisma, now = () => new Date() }) {
     const lateDays = lateDaysOf(toDateString(order.dueDate), businessToday(at));
     const types = requiredFineTypes(condition, lateDays);
     const tierIds = types.map((type) => (type === 'late' ? input.lateFineTierId : input.fineTierId)).filter(Boolean);
+    // 2.5.1: khóa mức phạt để Admin không xóa hẳn hoặc ẩn nó giữa lúc lập phiếu (xóa khóa FOR UPDATE).
+    if (tierIds.length) await tx.$queryRaw`SELECT id FROM fine_tiers WHERE id IN (${Prisma.join(tierIds)}) FOR SHARE`;
     const tiers = new Map(tierIds.length === 0 ? [] : (await tx.fineTier.findMany({
       where: { id: { in: tierIds } },
       select: { id: true, name: true, type: true, amount: true, isActive: true },

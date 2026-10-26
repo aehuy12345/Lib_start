@@ -47,6 +47,15 @@ const USERS = [
   { email: 'test.settlee@example.com', name: 'Test Settlee', role: 'reader', status: 'active' },
   { email: 'test.clearer@example.com', name: 'Test Clearer', role: 'reader', status: 'active' },
   { email: 'test.cleared@example.com', name: 'Test Cleared', role: 'reader', status: 'active' },
+  // 2.6.1: Admin kích hoạt / vô hiệu hóa (xem seedUserList); "api" cho Postman, "e2e" cho E2E.
+  // Tên có dấu để test tìm không dấu; active đang mượn 1 cuốn (edge 3), pending để kích hoạt (edge 5).
+  { email: 'test.um.api.active@example.com', name: 'Test Người Dùng API Hoạt Động', role: 'reader', status: 'active' },
+  { email: 'test.um.api.pending@example.com', name: 'Test Người Dùng API Chờ', role: 'reader', status: 'pending' },
+  { email: 'test.um.api.disabled@example.com', name: 'Test Người Dùng API Khóa', role: 'librarian', status: 'disabled' },
+  { email: 'test.um.api.admin@example.com', name: 'Test Người Dùng API Admin', role: 'admin', status: 'active' },
+  { email: 'test.um.e2e.active@example.com', name: 'Test Người Dùng E2E Hoạt Động', role: 'reader', status: 'active' },
+  { email: 'test.um.e2e.pending@example.com', name: 'Test Người Dùng E2E Chờ', role: 'reader', status: 'pending' },
+  { email: 'test.um.e2e.disabled@example.com', name: 'Test Người Dùng E2E Khóa', role: 'librarian', status: 'disabled' },
 ];
 
 async function main() {
@@ -76,6 +85,7 @@ async function main() {
   await seedFineTiers(prisma);
   await seedFinePayment(prisma);
   await seedFineReview(prisma);
+  await seedUserList(prisma);
   await prisma.$disconnect();
 }
 
@@ -762,6 +772,39 @@ async function seedFineReview(prisma) {
     }
     console.log(`fine      ${email}: phiếu ${set === 'full' ? 'XP-A..D' : 'XP-E'} = ${ids.join(', ')} cho 2.5.3`);
   }
+}
+
+// 2.6.1: mỗi tài khoản test.um.*.active đang mượn 1 cuốn "Test Sách ND 01" (cảnh báo edge 3). Trạng thái
+// tài khoản được upsert lại ở main; audit log kích hoạt / vô hiệu hóa của tài khoản test được dọn.
+const CATEGORY_USER_LIST = 'Test Người Dùng';
+
+async function seedUserList(prisma) {
+  const testUsers = await prisma.user.findMany({
+    where: { email: { in: USERS.map((u) => u.email) } }, select: { id: true },
+  });
+  const logs = await prisma.auditLog.deleteMany({
+    where: { entityType: 'user', entityId: { in: testUsers.map((u) => u.id) } },
+  });
+  const librarian = await prisma.user.findUnique({ where: { email: 'test.librarian@example.com' }, select: { id: true } });
+  const category = await prisma.category.findFirst({ where: { name: CATEGORY_USER_LIST, deletedAt: null } })
+    ?? await prisma.category.create({ data: { name: CATEGORY_USER_LIST } });
+  const book = await prisma.book.create({
+    data: {
+      title: 'Test Sách ND 01 Người Dùng', author: 'Tác Giả ND', publishYear: 2023, description: 'Dữ liệu test 2.6.1',
+      categoryId: category.id, totalQuantity: 3, availableQuantity: 1, borrowedQuantity: 2,
+    },
+  });
+  const at = (daysAgo) => new Date(Date.now() - daysAgo * DAY);
+  for (const email of ['test.um.api.active@example.com', 'test.um.e2e.active@example.com']) {
+    const reader = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+    await prisma.borrowOrder.create({
+      data: {
+        readerId: reader.id, bookId: book.id, status: 'borrowing', processedById: librarian.id,
+        processedAt: at(3), createdAt: at(4), borrowedAt: at(3), dueDate: businessDate(11),
+      },
+    });
+  }
+  console.log(`user      7 tài khoản test.um.* cho 2.6.1; đã dọn ${logs.count} audit log`);
 }
 
 main().catch((err) => {

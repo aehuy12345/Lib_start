@@ -34,7 +34,10 @@ export default function DashboardPage() {
             </>
           )}
           {user.role === 'admin' && (
-            <Link to="/admin/fine-tiers" className="font-medium text-blue-600 hover:underline">Mức phạt</Link>
+            <>
+              <Link to="/admin/fine-tiers" className="font-medium text-blue-600 hover:underline">Mức phạt</Link>
+              <Link to="/admin/users" className="font-medium text-blue-600 hover:underline">Người dùng</Link>
+            </>
           )}
           <span className="text-slate-700">{user.name}</span>
           <button type="button" onClick={logout} className="font-medium text-blue-600 hover:underline">

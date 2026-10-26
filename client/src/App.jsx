@@ -13,6 +13,7 @@ import DashboardPage from './pages/DashboardPage'
 import EditBookPage from './pages/EditBookPage'
 import FineTiersPage from './pages/FineTiersPage'
 import FineTicketsPage from './pages/FineTicketsPage'
+import UsersPage from './pages/UsersPage'
 import LoginPage from './pages/LoginPage'
 import ProfilePage from './pages/ProfilePage'
 import RegisterPage from './pages/RegisterPage'
@@ -44,6 +45,8 @@ function App() {
           <Route path="/admin/return-requests" element={<RequireAuth roles={['admin']}><ReturnRequestsPage /></RequireAuth>} />
           <Route path="/librarian/fine-tickets" element={<RequireAuth roles={['librarian']}><FineTicketsPage /></RequireAuth>} />
           <Route path="/admin/fine-tickets" element={<RequireAuth roles={['admin']}><FineTicketsPage /></RequireAuth>} />
+          {/* 2.6.1: chỉ Admin (edge 8). */}
+          <Route path="/admin/users" element={<RequireAuth roles={['admin']}><UsersPage /></RequireAuth>} />
           {/* 2.5.1: chỉ Admin; nhân viên thư viện bị chuyển về dashboard của mình (edge 6). */}
           <Route path="/admin/fine-tiers" element={<RequireAuth roles={['admin']}><FineTiersPage /></RequireAuth>} />
           {/* 2.2.3: danh sách sách công khai là trang chủ. */}

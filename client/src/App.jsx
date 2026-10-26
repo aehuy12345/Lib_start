@@ -5,6 +5,7 @@ import AddBookPage from './pages/AddBookPage'
 import BookDetailPage from './pages/BookDetailPage'
 import BooksPage from './pages/BooksPage'
 import BorrowHistoryPage from './pages/BorrowHistoryPage'
+import FinesPage from './pages/FinesPage'
 import BorrowRequestsPage from './pages/BorrowRequestsPage'
 import ReturnRequestsPage from './pages/ReturnRequestsPage'
 import CategoriesPage from './pages/CategoriesPage'
@@ -27,6 +28,7 @@ function App() {
           <Route path="/reader" element={<RequireAuth roles={['reader']}><DashboardPage /></RequireAuth>} />
           <Route path="/reader/profile" element={<RequireAuth roles={['reader']}><ProfilePage /></RequireAuth>} />
           <Route path="/reader/borrow-history" element={<RequireAuth roles={['reader']}><BorrowHistoryPage /></RequireAuth>} />
+          <Route path="/reader/fines" element={<RequireAuth roles={['reader']}><FinesPage /></RequireAuth>} />
           <Route path="/librarian" element={<RequireAuth roles={['librarian']}><DashboardPage /></RequireAuth>} />
           <Route path="/admin" element={<RequireAuth roles={['admin']}><DashboardPage /></RequireAuth>} />
           <Route path="/librarian/categories" element={<RequireAuth roles={['librarian']}><CategoriesPage /></RequireAuth>} />

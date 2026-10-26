@@ -167,6 +167,17 @@ describe('returnService.confirmReturnRequest (2.4.2)', () => {
     expect(res.result.lateDays).toBe(4);
   });
 
+  it('2.5.1: khóa mức phạt FOR SHARE trước khi đọc, sau khi khóa yêu cầu trả và trước độc giả', async () => {
+    const { service, tx, calls } = makeTx({ order: LATE });
+    await service.confirmReturnRequest(2, 9, { condition: 'damaged', fineTierId: 2, note: 'Rách bìa', lateFineTierId: 1 });
+    const sqls = calls.map((c) => c.sql.replace(/\s+/g, ' '));
+    const tiers = sqls.findIndex((s) => /FROM fine_tiers WHERE id IN \(\?\) FOR SHARE/.test(s));
+    expect(tiers).toBeGreaterThan(sqls.findIndex((s) => /FROM return_requests WHERE id = \? FOR UPDATE/.test(s)));
+    expect(tiers).toBeLessThan(sqls.findIndex((s) => /FROM users/.test(s)));
+    expect(calls[tiers].values[0].values).toEqual([1, 2]);
+    expect(tx.$queryRaw.mock.invocationCallOrder[tiers]).toBeLessThan(tx.fineTier.findMany.mock.invocationCallOrder[0]);
+  });
+
   it('hư hỏng + trả muộn: 2 phiếu, borrowed -1, damaged +1, available giữ nguyên', async () => {
     const { service, tx } = makeTx({ order: LATE });
     const res = await service.confirmReturnRequest(2, 9, {

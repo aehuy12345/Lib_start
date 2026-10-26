@@ -18,6 +18,8 @@ const { createBorrowService } = require('./modules/borrow/borrow.service');
 const { createBorrowRouter } = require('./modules/borrow/borrow.routes');
 const { createReturnService } = require('./modules/return/return.service');
 const { createReturnRouter } = require('./modules/return/return.routes');
+const { createFineService } = require('./modules/fine/fine.service');
+const { createFineTierRouter } = require('./modules/fine/fine.routes');
 
 // deps cho phép test thay prisma/mailer/tokens/storage bằng bản giả.
 function createApp(deps = {}) {
@@ -42,6 +44,7 @@ function createApp(deps = {}) {
     book: deps.bookService ?? createBookService({ prisma, storage }),
     borrow: deps.borrowService ?? createBorrowService({ prisma }),
     return: deps.returnService ?? createReturnService({ prisma }),
+    fine: deps.fineService ?? createFineService({ prisma }),
   };
   const requireAuth = createRequireAuth({ tokens, authService: services.auth });
 
@@ -60,6 +63,7 @@ function createApp(deps = {}) {
   app.use('/api/books', createBookRouter(services.book, requireAuth));
   app.use('/api/borrow-orders', createBorrowRouter(services.borrow, requireAuth));
   app.use('/api/return-requests', createReturnRouter(services.return, requireAuth));
+  app.use('/api/fine-tiers', createFineTierRouter(services.fine, requireAuth));
 
   app.use((req, res) => {
     res.status(404).json({ message: 'Không tìm thấy' });

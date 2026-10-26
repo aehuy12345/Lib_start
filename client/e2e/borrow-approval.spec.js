@@ -56,7 +56,8 @@ test.describe.serial('2.3.2 Mượn Sách (Nhân Viên)', () => {
     await expect(page.getByRole('status')).toContainText(`Đã xác nhận đơn mượn "${CONFIRM_BOOK}" của ${READER}, hạn trả`)
     await expect(row(page, CONFIRM_BOOK)).toHaveCount(0)
 
-    await expect(await availableOf(page, CONFIRM_BOOK)).toHaveText('0')
+    // Hết sách thì trang chi tiết hiện kèm nhãn "Hết sách" (2.2.4).
+    await expect(await availableOf(page, CONFIRM_BOOK)).toHaveText(/^0\s*Hết sách$/)
     // Lịch sử mượn trên trang chi tiết (nhân viên) hiện đơn Đang mượn.
     await expect(page.getByRole('cell', { name: READER })).toBeVisible()
   })

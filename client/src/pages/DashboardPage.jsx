@@ -28,6 +28,7 @@ export default function DashboardPage() {
               <Link to={`/${user.role}/books/new`} className="font-medium text-blue-600 hover:underline">Thêm Sách Mới</Link>
               <Link to={`/${user.role}/categories`} className="font-medium text-blue-600 hover:underline">Thể loại sách</Link>
               <Link to={`/${user.role}/borrow-orders`} className="font-medium text-blue-600 hover:underline">Đơn mượn chờ xác nhận</Link>
+              <Link to={`/${user.role}/return-requests`} className="font-medium text-blue-600 hover:underline">Quản lý trả sách</Link>
             </>
           )}
           <span className="text-slate-700">{user.name}</span>

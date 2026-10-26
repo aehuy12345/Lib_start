@@ -33,6 +33,9 @@ const USERS = [
   // 2.4.1: yêu cầu trả sách cho Postman (test.returner) và E2E (test.returnee), xem seedReturnRequest.
   { email: 'test.returner@example.com', name: 'Test Returner', role: 'reader', status: 'active' },
   { email: 'test.returnee@example.com', name: 'Test Returnee', role: 'reader', status: 'active' },
+  // 2.4.2: nhân viên xác nhận trả cho Postman (test.giver) và E2E (test.handover), xem seedReturnConfirm.
+  { email: 'test.giver@example.com', name: 'Test Giver', role: 'reader', status: 'active' },
+  { email: 'test.handover@example.com', name: 'Test Handover', role: 'reader', status: 'active' },
 ];
 
 async function main() {
@@ -58,6 +61,7 @@ async function main() {
   await seedBorrowApproval(prisma);
   await seedBorrowHistory(prisma);
   await seedReturnRequest(prisma);
+  await seedReturnConfirm(prisma);
   await prisma.$disconnect();
 }
 
@@ -480,6 +484,64 @@ async function seedReturnRequest(prisma) {
     await order(books[4], {});
   }
   console.log(`category  "${CATEGORY_RETURN}" (id ${category.id}) cho 2.4.1: ${books.map((b) => `${b.title.slice(10, 15)} ${b.id}`).join(', ')}`);
+}
+
+// 2.4.2: thể loại "Test Xác Nhận Trả", test.giver (Postman) và test.handover (E2E) có cùng bộ đơn.
+// XT 01..05 có yêu cầu trả chờ tạo 60+ ngày trước nên nằm đầu trang 1 (cũ nhất trước):
+//   XT 01 Bình Thường  hạn còn 5 ngày     → xác nhận Bình thường, không phiếu phạt
+//   XT 02 Trả Muộn     quá hạn 4 ngày     → Bình thường, bắt buộc mức Trả muộn
+//   XT 03 Hư Hỏng      hạn còn 3 ngày     → Hư hỏng: mức phạt + ghi chú
+//   XT 04 Mất          quá hạn 2 ngày     → Mất + Trả muộn (2 phiếu)
+//   XT 05 Từ Chối      hạn còn 6 ngày     → từ chối yêu cầu
+//   XT 06 Tại Quầy     hạn còn 2 ngày, không có yêu cầu → trả tại quầy
+// Mỗi sách: tổng 3 = 1 sẵn + 2 đang mượn. Mức phạt test: Trả muộn, Hư Hỏng (seedBookDetail), Mất, một mức đã ẩn.
+const CATEGORY_RETURN_CONFIRM = 'Test Xác Nhận Trả';
+
+async function seedReturnConfirm(prisma) {
+  const readers = await prisma.user.findMany({
+    where: { email: { in: ['test.giver@example.com', 'test.handover@example.com'] } }, select: { id: true },
+  });
+  const librarian = await prisma.user.findUnique({ where: { email: 'test.librarian@example.com' }, select: { id: true } });
+  const category = await prisma.category.findFirst({ where: { name: CATEGORY_RETURN_CONFIRM, deletedAt: null } })
+    ?? await prisma.category.create({ data: { name: CATEGORY_RETURN_CONFIRM } });
+  const tiers = [
+    { name: 'Test Trả Muộn', type: 'late', amount: 10000 },
+    { name: 'Test Mất Sách', type: 'lost', amount: 150000 },
+    { name: 'Test Hư Hỏng Ẩn', type: 'damaged', amount: 30000, isActive: false },
+  ];
+  for (const tier of tiers) {
+    if (!await prisma.fineTier.findFirst({ where: { name: tier.name } })) await prisma.fineTier.create({ data: tier });
+  }
+  const base = { author: 'Tác Giả XT', publishYear: 2023, description: 'Dữ liệu test 2.4.2', categoryId: category.id };
+  const FIXTURES = [
+    ['XT 01 Bình Thường', 5], ['XT 02 Trả Muộn', -4], ['XT 03 Hư Hỏng', 3],
+    ['XT 04 Mất', -2], ['XT 05 Từ Chối', 6], ['XT 06 Tại Quầy', 2],
+  ];
+  const books = [];
+  for (const [title] of FIXTURES) {
+    books.push(await prisma.book.create({
+      data: { ...base, title: `Test Sách ${title}`, totalQuantity: 3, availableQuantity: 1, borrowedQuantity: 2 },
+    }));
+  }
+  const at = (daysAgo) => new Date(Date.now() - daysAgo * DAY);
+  let age = 0;
+  for (const { id: readerId } of readers) {
+    for (const [index, [, dueIn]] of FIXTURES.entries()) {
+      const order = await prisma.borrowOrder.create({
+        data: {
+          readerId, bookId: books[index].id, status: 'borrowing', processedById: librarian.id,
+          processedAt: at(20), createdAt: at(21), borrowedAt: at(20), dueDate: businessDate(dueIn),
+        },
+      });
+      // Phút lệch nhau để thứ tự ổn định: test.giver trước, trong mỗi độc giả XT 01 → 05.
+      if (index < 5) {
+        await prisma.returnRequest.create({
+          data: { borrowOrderId: order.id, requestedById: readerId, createdAt: new Date(at(70).getTime() + (age += 1) * 60000) },
+        });
+      }
+    }
+  }
+  console.log(`category  "${CATEGORY_RETURN_CONFIRM}" (id ${category.id}) cho 2.4.2: ${books.map((b) => `${b.title.slice(10, 15)} ${b.id}`).join(', ')}`);
 }
 
 main().catch((err) => {

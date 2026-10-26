@@ -72,6 +72,8 @@ test.describe.serial('2.4.1 Yêu cầu trả sách', () => {
     await row(page, T('03 Chờ Trả')).getByRole('button', { name: /^Hủy yêu cầu trả/ }).click()
     await expect(page.getByRole('status')).toHaveText(`Đã hủy yêu cầu trả "${T('03 Chờ Trả')}"`)
     await other.reload()
+    // Đợi tab 2 tải xong danh sách trước khi tab 1 gửi lại, nếu không tab 2 có thể thấy yêu cầu mới.
+    await expect(row(other, T('03 Chờ Trả')).getByRole('button', { name: /^Xin trả sách/ })).toBeVisible()
 
     await row(page, T('03 Chờ Trả')).getByRole('button', { name: /^Xin trả sách/ }).click()
     await page.getByRole('button', { name: 'Đồng ý' }).click()

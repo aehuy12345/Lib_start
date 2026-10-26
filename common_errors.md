@@ -17,6 +17,7 @@ Tóm tắt các lỗi đã gặp trong quá trình làm và cách sửa. Nhóm t
 ## Server dev / cổng
 
 - **Server cũ còn chạy chiếm cổng 5000** (2.1.2, gặp lại ở 2.1.3 và 2.2.5): process `node src/index.js` từ phiên trước vẫn chạy code cũ nên route mới trả 404 "Không tìm thấy", còn server mới khởi động không báo lỗi. → Trước khi test API, kiểm tra process đang giữ cổng (`netstat -ano | grep :5000`, sau đó `Get-CimInstance Win32_Process -Filter "ProcessId=<pid>"`), dừng nó rồi chạy lại.
+- **Auto mode chặn dừng server cũ trên cổng 5000** (2.4.2): `Stop-Process` bị từ chối (`Interfere With Workloads`), server mới chạy cùng cổng thì thoát ngay, server cũ vẫn trả 404 cho route mới. → Không dừng process của người dùng; chạy server mới ở cổng khác (`PORT=5001 node src/index.js`), newman dùng `--env-var baseUrl=http://localhost:5001/api`, E2E chạy Vite riêng `VITE_API_URL=http://localhost:5001/api npx vite --port 5174` và một config Playwright tạm có `baseURL` 5174 (xóa sau khi chạy). Config mặc định trỏ 5173 nên sẽ test nhầm vào server cũ.
 - **Vite `--strictPort` thất bại vì 5173 đã có dev server** (2.1.2): server đang chạy vẫn dùng được (Vite tự cập nhật code). → Kiểm tra cổng trước, dùng lại server có sẵn.
 
 ## Biến môi trường (`server/.env`)
@@ -43,6 +44,13 @@ Tóm tắt các lỗi đã gặp trong quá trình làm và cách sửa. Nhóm t
 - **E2E 2.2.1 hỏng khi chạy chung với E2E 2.2.2** (2.2.2): sách mới thêm vào `Test Có Sách` làm số sách khác 1 mà 2.2.1 đang kiểm tra. → Mỗi tính năng ghi dữ liệu vào thể loại test riêng (`Test Thêm Sách`); chạy cả bộ `npx playwright test` trước khi kết luận.
 - **`getByRole('banner')` pass trên jsdom nhưng không tìm thấy trên trình duyệt** (2.1.3): `<header>` nằm trong `<main>` thì Chrome không gán role banner. → Không dựa vào role banner; dùng `page.locator('header')` (E2E) hoặc `document.querySelector('header')` (unit).
 
+- **`toHaveText('0')` lúc pass lúc fail** (2.4.2, trong spec 2.3.2): khi sách hết, ô Có sẵn hiện `0` kèm nhãn `Hết sách`, nên text đầy đủ là `0Hết sách`; assertion chỉ pass khi đọc DOM trước lúc nhãn hiện. Chạy riêng thì pass, chạy cả bộ thì fail. → So khớp đúng nội dung hiển thị (`/^0\s*Hết sách$/`); khi một spec chỉ lỗi lúc chạy cả bộ, chèn `waitForTimeout` tạm và in `textContent` để xem giá trị thật.
+- **Race giữa hai tab trong E2E 2.4.1** (2.4.2): `other.reload()` xong nhưng danh sách chưa tải thì tab kia đã gửi yêu cầu mới, nên tab hai không thấy nút. → Sau khi reload, đợi phần tử cần dùng hiện ra rồi mới thao tác ở tab còn lại.
+
+## Joi
+
+- **`Joi.when('x', { is: Joi.valid(...) })` khớp cả khi thiếu `x`** (2.4.2): body `{}` báo luôn lỗi `fineTierId` và `note` bắt buộc, vì schema `is` mặc định cho phép `undefined`. → Viết `is: Joi.valid('damaged', 'lost').required()`.
+
 ## Lint
 
 - **oxlint `react(only-export-components)`** (2.1.3): file component export thêm một hàm helper (`applyServerErrors`). → Tách helper ra file `.js` riêng (`features/profile/formErrors.js`).
@@ -56,5 +64,7 @@ Tóm tắt các lỗi đã gặp trong quá trình làm và cách sửa. Nhóm t
 
 - **Playwright MCP không lưu được screenshot vào scratchpad** (2.2.5, lặp lại 2.3.3): `File access denied ... outside allowed roots`; chỉ được ghi trong repo và `.playwright-mcp/`. → Bỏ `filename` (mặc định lưu vào `.playwright-mcp/`, đã gitignore).
 - **Trình duyệt của Playwright MCP còn phiên đăng nhập cũ** (2.2.5): localStorage giữ token từ lần trước nên trang `/login` không hiện form, điền `#email` báo không tìm thấy. → Chụp `browser_snapshot` trước khi thao tác; đã đăng nhập thì vào thẳng trang cần test (nhớ kiểm tra đúng vai trò).
+- **Token cũ trong trình duyệt Playwright MCP làm trang công khai cũng bị chuyển về `/login?expired=1`** (2.4.2): mở `/books/:id` (không cần đăng nhập) nhưng localStorage còn token hết hạn, nên lần gọi API trả 401 và trang chuyển sang đăng nhập; đọc DOM ra rỗng. → Đăng nhập lại trước khi kiểm tra, kể cả với trang công khai.
+- **Click qua Playwright MCP báo `does not match any elements` ngay sau `navigate`** (2.4.2): danh sách tải bằng API sau khi trang load, nên nút chưa có. → Chụp `browser_snapshot` (hoặc đợi) để thấy dữ liệu đã hiện rồi mới click.
 - **Postman MCP `getCollections` treo tới khi hết thời gian chờ (300s)** (2.1.2): lệnh đọc không trả kết quả, nhưng `createCollection` vẫn chạy bình thường. → Không chờ lệnh đọc; tạo collection trực tiếp theo workspace ID (`getWorkspaces`). Chạy test API bằng `npx -y newman@6.2.3 run <file>` (cloud của Postman không gọi được localhost).
 - **Script test Postman báo `ReferenceError: Intl is not defined`** (2.3.2): sandbox của Postman/newman không có `Intl`, nên không tính được ngày theo `Asia/Ho_Chi_Minh` bằng `Intl.DateTimeFormat`. → Việt Nam cố định UTC+7: `new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10)`.

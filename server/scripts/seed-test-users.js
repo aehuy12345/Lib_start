@@ -41,6 +41,12 @@ const USERS = [
   // 2.5.2: cùng bộ phiếu phạt (xem seedFinePayment); payer cho Postman, payee cho E2E.
   { email: 'test.payer@example.com', name: 'Test Payer', role: 'reader', status: 'active' },
   { email: 'test.payee@example.com', name: 'Test Payee', role: 'reader', status: 'active' },
+  // 2.5.3: nhân viên xác nhận/từ chối thanh toán (xem seedFineReview); settler/clearer cho Postman,
+  // settlee/cleared cho E2E. clearer/cleared chỉ có một phiếu chờ xác nhận (edge 5).
+  { email: 'test.settler@example.com', name: 'Test Settler', role: 'reader', status: 'active' },
+  { email: 'test.settlee@example.com', name: 'Test Settlee', role: 'reader', status: 'active' },
+  { email: 'test.clearer@example.com', name: 'Test Clearer', role: 'reader', status: 'active' },
+  { email: 'test.cleared@example.com', name: 'Test Cleared', role: 'reader', status: 'active' },
 ];
 
 async function main() {
@@ -69,6 +75,7 @@ async function main() {
   await seedReturnConfirm(prisma);
   await seedFineTiers(prisma);
   await seedFinePayment(prisma);
+  await seedFineReview(prisma);
   await prisma.$disconnect();
 }
 
@@ -679,6 +686,81 @@ async function seedFinePayment(prisma) {
       ids.push(ticket.id);
     }
     console.log(`fine      ${email}: phiếu TT-A..E = ${ids.join(', ')} cho 2.5.2`);
+  }
+}
+
+// 2.5.3: sách XP 01 thể loại "Test Xác Nhận Phạt", mức "Test XP Trả Muộn" 10.000 / "Test XP Hư Hỏng" 50.000 /
+// "Test XP Mất" 120.000. Phiếu chờ xác nhận gửi từ 60+ ngày trước nên đứng đầu hàng đợi (gửi sớm nhất trước).
+//   test.settler (Postman) / test.settlee (E2E):
+//     XP-A Trả muộn Chờ xác nhận (để xác nhận)   XP-B Hư hỏng Chờ xác nhận, có ghi chú (để từ chối)
+//     XP-C Mất Chưa thanh toán (edge 2)          XP-D Hư hỏng Đã thanh toán (edge 7)
+//   test.clearer (Postman) / test.cleared (E2E): chỉ XP-E Mất Chờ xác nhận → xác nhận xong hết bị chặn mượn (edge 5).
+const CATEGORY_FINE_REVIEW = 'Test Xác Nhận Phạt';
+
+async function seedFineReview(prisma) {
+  const librarian = await prisma.user.findUnique({ where: { email: 'test.librarian@example.com' }, select: { id: true } });
+  const category = await prisma.category.findFirst({ where: { name: CATEGORY_FINE_REVIEW, deletedAt: null } })
+    ?? await prisma.category.create({ data: { name: CATEGORY_FINE_REVIEW } });
+  const book = await prisma.book.create({
+    data: {
+      title: 'Test Sách XP 01 Xác Nhận Phạt', author: 'Tác Giả XP', publishYear: 2023, description: 'Dữ liệu test 2.5.3',
+      categoryId: category.id, totalQuantity: 3, availableQuantity: 3,
+    },
+  });
+  const tiers = {};
+  for (const [name, type, amount] of [
+    ['Test XP Trả Muộn', 'late', 10000], ['Test XP Hư Hỏng', 'damaged', 50000], ['Test XP Mất', 'lost', 120000],
+  ]) {
+    tiers[type] = await prisma.fineTier.create({ data: { name, type, amount } });
+  }
+  const at = (daysAgo) => new Date(Date.now() - daysAgo * DAY);
+  // [type, status, ngày phạt cách đây, thêm]
+  const sets = {
+    full: [
+      ['late', 'pending', 70, { submittedAt: at(69) }],
+      ['damaged', 'pending', 70, { submittedAt: at(68), note: 'Rách bìa (test 2.5.3)' }],
+      ['lost', 'unpaid', 2, {}],
+      ['damaged', 'paid', 5, { submittedAt: at(4), confirmedAt: at(3), confirmedById: librarian.id }],
+    ],
+    single: [['lost', 'pending', 70, { submittedAt: at(67) }]],
+  };
+  // Postman trước E2E: offset làm phiếu của Postman gửi sớm hơn, thứ tự trong hàng đợi cố định.
+  for (const [email, set, offset] of [
+    ['test.settler@example.com', 'full', 20], ['test.clearer@example.com', 'single', 20],
+    ['test.settlee@example.com', 'full', 0], ['test.cleared@example.com', 'single', 0],
+  ]) {
+    const reader = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+    const ids = [];
+    for (const [type, status, daysAgo, extra] of sets[set]) {
+      const shift = (date) => new Date(date.getTime() - offset * DAY);
+      const order = await prisma.borrowOrder.create({
+        data: {
+          readerId: reader.id, bookId: book.id, status: 'returned', processedById: librarian.id,
+          processedAt: shift(at(daysAgo + 20)), createdAt: shift(at(daysAgo + 21)), borrowedAt: shift(at(daysAgo + 20)),
+          dueDate: businessDate(-daysAgo - offset - 6), returnedAt: shift(at(daysAgo)),
+        },
+      });
+      const condition = type === 'late' ? 'normal' : type;
+      const returnRequest = await prisma.returnRequest.create({
+        data: {
+          borrowOrderId: order.id, status: 'confirmed', requestedById: reader.id, processedById: librarian.id,
+          processedAt: shift(at(daysAgo)), condition, conditionNote: condition === 'normal' ? null : 'Dữ liệu test 2.5.3',
+          lateDays: type === 'late' ? 6 : 0,
+        },
+      });
+      const tier = tiers[type];
+      const ticket = await prisma.fineTicket.create({
+        data: {
+          readerId: reader.id, borrowOrderId: order.id, returnRequestId: returnRequest.id, fineTierId: tier.id,
+          type, tierName: tier.name, amount: tier.amount, status, issuedById: librarian.id, issuedAt: shift(at(daysAgo)),
+          ...extra,
+          ...(extra.submittedAt && { submittedAt: shift(extra.submittedAt) }),
+          ...(extra.confirmedAt && { confirmedAt: shift(extra.confirmedAt) }),
+        },
+      });
+      ids.push(ticket.id);
+    }
+    console.log(`fine      ${email}: phiếu ${set === 'full' ? 'XP-A..D' : 'XP-E'} = ${ids.join(', ')} cho 2.5.3`);
   }
 }
 

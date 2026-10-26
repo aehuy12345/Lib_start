@@ -1,0 +1,1293 @@
+{
+  "info": {
+    "name": "Lib_start - 2.5.3 Xác nhận thanh toán phạt (nhân viên)",
+    "description": "API test cho 2.5.3 Xem & xác nhận thanh toán khoản phạt (design/flows/2.5.3-thanh-toan-phat-nhan-vien.md). Bản gốc trong repo: server/postman/2.5.3-thanh-toan-phat-nhan-vien.postman_collection.json. Chạy `node scripts/seed-test-users.js` trước (test.settler có phiếu XP-A..D, test.clearer có XP-E). Chạy theo thứ tự, từ thư mục server/.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Đăng nhập",
+      "item": [
+        {
+          "name": "settler đăng nhập",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('settlerToken', pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test.settler@example.com\",\n  \"password\": \"{{password}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "clearer đăng nhập",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('clearerToken', pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test.clearer@example.com\",\n  \"password\": \"{{password}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "librarian đăng nhập",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('librarianToken', pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test.librarian@example.com\",\n  \"password\": \"{{password}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "admin đăng nhập",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('adminToken', pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test.admin@example.com\",\n  \"password\": \"{{password}}\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Phân quyền",
+      "item": [
+        {
+          "name": "GET / không token → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/fine-tickets"
+          }
+        },
+        {
+          "name": "Edge 6: GET / độc giả → 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{settlerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets"
+          }
+        },
+        {
+          "name": "POST /:id/confirm không token → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/fine-tickets/1/confirm"
+          }
+        },
+        {
+          "name": "Edge 6: POST /:id/confirm độc giả → 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{settlerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets/1/confirm"
+          }
+        },
+        {
+          "name": "Edge 6: POST /:id/reject độc giả → 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{settlerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets/1/reject",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"x\"\n}"
+            }
+          }
+        },
+        {
+          "name": "GET /:id/receipt không token → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/fine-tickets/1/receipt"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Xem danh sách",
+      "item": [
+        {
+          "name": "Mặc định: phiếu Chờ xác nhận, gửi sớm nhất trước",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('chỉ phiếu Chờ xác nhận', () => pm.expect(b.tickets.every((t) => t.status === 'pending' && t.canReview)).to.be.true);",
+                  "pm.test('gửi sớm nhất trước', () => { const s = b.tickets.map((t) => t.submittedAt); pm.expect(s).to.eql([...s].sort()); });",
+                  "pm.test('tổng phiếu chờ khớp danh sách', () => pm.expect(b.summary.pendingCount).to.eql(b.pagination.total));",
+                  "pm.test('10/trang', () => pm.expect(b.pagination.pageSize).to.eql(10));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets"
+          }
+        },
+        {
+          "name": "Admin cũng xem được",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets"
+          }
+        },
+        {
+          "name": "Tìm theo email: 2 phiếu chờ của test.settler, đủ chi tiết",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('2 phiếu, A gửi trước B', () => pm.expect(b.tickets.map((t) => t.tierName)).to.eql(['Test XP Trả Muộn', 'Test XP Hư Hỏng']));",
+                  "const [a, bt] = b.tickets;",
+                  "pm.test('bước 2: độc giả, đơn mượn, sách, nguyên nhân, số tiền, ngày phạt', () => { pm.expect(a.reader).to.include({ name: 'Test Settler', email: 'test.settler@example.com' }); pm.expect(a.borrowOrderId).to.be.a('number'); pm.expect(a.book.title).to.eql('Test Sách XP 01 Xác Nhận Phạt'); pm.expect(a).to.include({ type: 'late', amount: 10000, hasReceipt: false, canReview: true }); pm.expect(a.issuedAt).to.be.a('string'); pm.expect(a.submittedAt).to.be.a('string'); });",
+                  "pm.test('ghi chú và nội dung chuyển khoản', () => { pm.expect(bt.note).to.eql('Rách bìa (test 2.5.3)'); pm.expect(bt.transferContent).to.eql('THU VIEN PHAT ' + bt.id); });",
+                  "pm.collectionVariables.set('ticketA', a.id); pm.collectionVariables.set('ticketB', bt.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets?q=test.settler@example.com"
+          }
+        },
+        {
+          "name": "Edge 2: tab Chưa thanh toán thấy phiếu C để theo dõi",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const t = pm.response.json().tickets;",
+                  "pm.test('1 phiếu Mất, không xác nhận được', () => { pm.expect(t).to.have.length(1); pm.expect(t[0]).to.include({ status: 'unpaid', type: 'lost', canReview: false }); pm.expect(t[0].submittedAt).to.eql(null); });",
+                  "pm.collectionVariables.set('ticketC', t[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets?status=unpaid&q=test.settler"
+          }
+        },
+        {
+          "name": "Tab Đã thanh toán: phiếu D kèm người xác nhận",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const t = pm.response.json().tickets;",
+                  "pm.test('1 phiếu, có người xác nhận', () => { pm.expect(t).to.have.length(1); pm.expect(t[0]).to.include({ status: 'paid', confirmedByName: 'Test Librarian', canReview: false }); pm.expect(t[0].confirmedAt).to.be.a('string'); });",
+                  "pm.collectionVariables.set('ticketD', t[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets?status=paid&q=TEST.SETTLER"
+          }
+        },
+        {
+          "name": "Tab Tất cả: 4 phiếu, ngày phạt mới nhất trước",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const t = pm.response.json().tickets;",
+                  "pm.test('4 phiếu', () => pm.expect(t).to.have.length(4));",
+                  "pm.test('mới nhất trước', () => { const s = t.map((x) => x.issuedAt); pm.expect(s).to.eql([...s].sort().reverse()); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets?status=all&q=Test%20Settler"
+          }
+        },
+        {
+          "name": "Tìm theo mã phiếu #A",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('đúng phiếu A', () => pm.expect(pm.response.json().tickets.map((t) => t.id)).to.include(Number(pm.collectionVariables.get('ticketA'))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets?q=%23{{ticketA}}"
+          }
+        },
+        {
+          "name": "Tìm theo nội dung chuyển khoản của B",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('chỉ phiếu B', () => pm.expect(pm.response.json().tickets.map((t) => t.id)).to.eql([Number(pm.collectionVariables.get('ticketB'))]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets?q=THU%20VIEN%20PHAT%20{{ticketB}}"
+          }
+        },
+        {
+          "name": "Tìm theo tên sách",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('10 phiếu XP (4+1+4+1)', () => pm.expect(pm.response.json().pagination.total).to.eql(10));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets?status=all&q=XP%2001%20X%C3%A1c%20Nh%E1%BA%ADn"
+          }
+        },
+        {
+          "name": "status/page lạ → về mặc định",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('Chờ xác nhận, trang 1', () => { const b = pm.response.json(); pm.expect(b.pagination.page).to.eql(1); pm.expect(b.tickets.every((t) => t.status === 'pending')).to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets?status=due&page=abc"
+          }
+        },
+        {
+          "name": "Không có kết quả → danh sách rỗng",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('rỗng', () => { const b = pm.response.json(); pm.expect(b.tickets).to.eql([]); pm.expect(b.pagination).to.eql({ page: 1, pageSize: 10, total: 0, totalPages: 1 }); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets?q=khong-co-ai-xyz"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Xác nhận và từ chối",
+      "item": [
+        {
+          "name": "Edge 2: xác nhận phiếu C chưa gửi → 409 not_submitted",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('reason not_submitted', () => pm.expect(pm.response.json().reason).to.eql('not_submitted'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets/{{ticketC}}/confirm"
+          }
+        },
+        {
+          "name": "Edge 7: xác nhận phiếu D đã thanh toán → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('reason already_processed', () => pm.expect(pm.response.json().reason).to.eql('already_processed'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets/{{ticketD}}/confirm"
+          }
+        },
+        {
+          "name": "Edge 7: từ chối phiếu D đã thanh toán → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('reason already_processed', () => pm.expect(pm.response.json().reason).to.eql('already_processed'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets/{{ticketD}}/reject",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Sai\"\n}"
+            }
+          }
+        },
+        {
+          "name": "id không hợp lệ → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets/abc/confirm"
+          }
+        },
+        {
+          "name": "id không tồn tại → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));",
+                  "pm.test('thông báo', () => pm.expect(pm.response.json().message).to.eql('Không tìm thấy phiếu phạt'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets/2147483647/confirm"
+          }
+        },
+        {
+          "name": "Từ chối B thiếu lý do → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('lỗi reason', () => pm.expect(pm.response.json().errors.reason).to.eql('Lý do từ chối là bắt buộc'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets/{{ticketB}}/reject",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "Từ chối B lý do chỉ khoảng trắng → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('lỗi reason', () => pm.expect(pm.response.json().errors.reason).to.eql('Lý do từ chối là bắt buộc'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets/{{ticketB}}/reject",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"    \"\n}"
+            }
+          }
+        },
+        {
+          "name": "Edge 4: lý do 501 ký tự → 400",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('longReason', 'a'.repeat(501));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('tối đa 500', () => pm.expect(pm.response.json().errors.reason).to.eql('Lý do từ chối tối đa 500 ký tự'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets/{{ticketB}}/reject",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"{{longReason}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Nhân viên xem biên lai phiếu A không có ảnh → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));",
+                  "pm.test('thông báo', () => pm.expect(pm.response.json().message).to.eql('Phiếu phạt không có ảnh biên lai'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets/{{ticketA}}/receipt"
+          }
+        },
+        {
+          "name": "Xác nhận phiếu A → Đã thanh toán, lưu người xác nhận",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('thông báo', () => pm.expect(b.message).to.eql('Đã xác nhận thanh toán'));",
+                  "pm.test('paid, người và thời điểm xác nhận', () => { pm.expect(b.ticket).to.include({ status: 'paid', confirmedByName: 'Test Librarian', canReview: false }); pm.expect(b.ticket.confirmedAt).to.be.a('string'); });",
+                  "pm.test('độc giả còn B và C', () => pm.expect(b.readerOutstanding).to.eql(2));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets/{{ticketA}}/confirm"
+          }
+        },
+        {
+          "name": "Edge 1: Admin xác nhận lại phiếu A → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('reason already_processed', () => pm.expect(pm.response.json().reason).to.eql('already_processed'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets/{{ticketA}}/confirm"
+          }
+        },
+        {
+          "name": "Edge 1: từ chối phiếu A đã xác nhận → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('reason already_processed', () => pm.expect(pm.response.json().reason).to.eql('already_processed'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets/{{ticketA}}/reject",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Sai\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Edge 3: từ chối phiếu B kèm lý do (trim) → Từ chối",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('thông báo', () => pm.expect(b.message).to.eql('Đã từ chối thanh toán'));",
+                  "pm.test('rejected, lý do đã trim', () => { pm.expect(b.ticket).to.include({ status: 'rejected', rejectReason: 'Chuyển thiếu 10.000 đ', canReview: false }); pm.expect(b.ticket.rejectedAt).to.be.a('string'); });",
+                  "pm.test('vẫn còn 2 phiếu chưa xong', () => pm.expect(b.readerOutstanding).to.eql(2));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets/{{ticketB}}/reject",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"  Chuyển thiếu 10.000 đ  \"\n}"
+            }
+          }
+        },
+        {
+          "name": "Từ chối lại phiếu B → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('reason already_processed', () => pm.expect(pm.response.json().reason).to.eql('already_processed'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets/{{ticketB}}/reject",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Lần hai\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Độc giả thấy lý do từ chối và được gửi lại",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json().tickets.find((t) => t.id === Number(pm.collectionVariables.get('ticketB')));",
+                  "pm.test('B từ chối kèm lý do, canPay', () => pm.expect(b).to.include({ status: 'rejected', rejectReason: 'Chuyển thiếu 10.000 đ', canPay: true }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{settlerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets/mine"
+          }
+        },
+        {
+          "name": "Độc giả gửi lại phiếu B kèm ảnh biên lai",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('pending, có ảnh', () => pm.expect(pm.response.json().ticket).to.include({ status: 'pending', hasReceipt: true }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{settlerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets/{{ticketB}}/pay",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "receipt",
+                  "type": "file",
+                  "src": "postman/fixtures/avatar.png"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Nhân viên xem biên lai phiếu B → signed URL",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('signed URL bucket receipts', () => { const u = pm.response.json().url; pm.expect(u).to.include('/object/sign/receipts/'); pm.expect(u).to.include('token='); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets/{{ticketB}}/receipt"
+          }
+        },
+        {
+          "name": "Danh sách chờ có B kèm biên lai và lý do lần trước",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('pending, hasReceipt, giữ lý do cũ', () => pm.expect(pm.response.json().tickets[0]).to.include({ status: 'pending', hasReceipt: true, rejectReason: 'Chuyển thiếu 10.000 đ', canReview: true }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets?q=%23{{ticketB}}"
+          }
+        },
+        {
+          "name": "Admin xác nhận phiếu B → bỏ lý do từ chối cũ",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('paid, người xác nhận là Admin, không còn lý do', () => pm.expect(b.ticket).to.include({ status: 'paid', confirmedByName: 'Test Admin', rejectReason: null, rejectedAt: null }));",
+                  "pm.test('độc giả còn C', () => pm.expect(b.readerOutstanding).to.eql(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets/{{ticketB}}/confirm"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Edge 5: hết bị chặn mượn",
+      "item": [
+        {
+          "name": "Tìm sách XP 01",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const books = pm.response.json().books;",
+                  "pm.test('tìm thấy', () => pm.expect(books).to.have.length(1));",
+                  "pm.collectionVariables.set('bookId', books[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/books?q=XP%2001%20X%C3%A1c%20Nh%E1%BA%ADn"
+          }
+        },
+        {
+          "name": "Trước: test.clearer bị chặn vì phiếu chờ xác nhận",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('unpaid_fine', () => pm.expect(pm.response.json()).to.include({ canBorrow: false, reason: 'unpaid_fine' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{clearerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/books/{{bookId}}/borrow-eligibility"
+          }
+        },
+        {
+          "name": "Phiếu E của test.clearer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const t = pm.response.json().tickets;",
+                  "pm.test('1 phiếu chờ', () => pm.expect(t).to.have.length(1));",
+                  "pm.collectionVariables.set('ticketE', t[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets?q=test.clearer@example.com"
+          }
+        },
+        {
+          "name": "Xác nhận phiếu cuối cùng → readerOutstanding 0",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('0 phiếu còn lại', () => pm.expect(pm.response.json().readerOutstanding).to.eql(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets/{{ticketE}}/confirm"
+          }
+        },
+        {
+          "name": "Sau: test.clearer mượn được",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('canBorrow', () => pm.expect(pm.response.json()).to.include({ canBorrow: true, reason: null }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{clearerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/books/{{bookId}}/borrow-eligibility"
+          }
+        },
+        {
+          "name": "Độc giả thấy phiếu E Đã thanh toán",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('E paid', () => pm.expect(pm.response.json().tickets.map((t) => t.id)).to.eql([Number(pm.collectionVariables.get('ticketE'))]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{clearerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/fine-tickets/mine?status=paid"
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000/api"
+    },
+    {
+      "key": "password",
+      "value": "Test@1234"
+    }
+  ]
+}

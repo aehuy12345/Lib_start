@@ -22,6 +22,8 @@ const { createFineService } = require('./modules/fine/fine.service');
 const { createFineTierRouter } = require('./modules/fine/fine.routes');
 const { createFineTicketService } = require('./modules/fine/fineTicket.service');
 const { createFineTicketRouter } = require('./modules/fine/fineTicket.routes');
+const { createUserService } = require('./modules/user/user.service');
+const { createUserRouter } = require('./modules/user/user.routes');
 
 // deps cho phép test thay prisma/mailer/tokens/storage bằng bản giả.
 function createApp(deps = {}) {
@@ -48,6 +50,7 @@ function createApp(deps = {}) {
     return: deps.returnService ?? createReturnService({ prisma }),
     fine: deps.fineService ?? createFineService({ prisma }),
     fineTicket: deps.fineTicketService ?? createFineTicketService({ prisma, storage }),
+    user: deps.userService ?? createUserService({ prisma }),
   };
   const requireAuth = createRequireAuth({ tokens, authService: services.auth });
 
@@ -68,6 +71,7 @@ function createApp(deps = {}) {
   app.use('/api/return-requests', createReturnRouter(services.return, requireAuth));
   app.use('/api/fine-tiers', createFineTierRouter(services.fine, requireAuth));
   app.use('/api/fine-tickets', createFineTicketRouter(services.fineTicket, requireAuth));
+  app.use('/api/users', createUserRouter(services.user, requireAuth));
 
   app.use((req, res) => {
     res.status(404).json({ message: 'Không tìm thấy' });

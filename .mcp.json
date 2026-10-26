@@ -12,7 +12,8 @@
     },
     "postman": {
       "type": "http",
-      "url": "https://mcp.postman.com/mcp"
+      "url": "https://mcp.postman.com/mcp",
+      "timeout": 600000
     }
   }
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { parseApiError } from '../../api/client'
+import { useAuth } from '../auth/AuthContext'
 import { formatDate } from '../book/bookDetail'
 import {
   getBookStats, getBorrowsToday, getOverdueReaders, getReaderStats, getTopBooks,
@@ -50,6 +51,7 @@ function Stat({ label, value, tone = 'text-slate-900' }) {
 }
 
 export default function StaffDashboard() {
+  const { role } = useAuth().user
   const [books, reloadBooks] = useSection(getBookStats)
   const [readers, reloadReaders] = useSection(getReaderStats)
   const [today, reloadToday] = useSection(getBorrowsToday)
@@ -149,7 +151,12 @@ export default function StaffDashboard() {
                 ))}
               </tbody>
             </table>
-            {overdueRemainder(data) && <p className="mt-3 text-sm text-slate-600">{overdueRemainder(data)}</p>}
+            {overdueRemainder(data) && (
+              <p className="mt-3 text-sm text-slate-600">
+                {overdueRemainder(data)}{' '}
+                <Link to={`/${role}/reports?type=fines`} className="font-medium text-blue-600 hover:underline">Xem tất cả</Link>
+              </p>
+            )}
           </>
         ))}
       </Card>

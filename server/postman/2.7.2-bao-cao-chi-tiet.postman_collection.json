@@ -1,0 +1,1371 @@
+{
+  "info": {
+    "name": "Lib_start - 2.7.2 Báo cáo chi tiết",
+    "description": "API test cho 2.7.2 Báo cáo chi tiết (design/flows/2.7.2-bao-cao-chi-tiet.md). Bản gốc trong repo: server/postman/2.7.2-bao-cao-chi-tiet.postman_collection.json. Chạy `node scripts/seed-test-users.js` trước: dữ liệu của test.report (thể loại Test Báo Cáo, sách Test Sách BC 01..03) nằm trong quý 1/2020, trước mọi dữ liệu khác, nên lọc 01/01/2020 – 31/03/2020 cho số liệu chính xác. Danh sách độc giả nợ là tại thời điểm xem; test.report có phiếu Mất 90.000.000 đ chưa thanh toán nên đứng đầu.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000/api"
+    },
+    {
+      "key": "password",
+      "value": "Test@1234"
+    }
+  ],
+  "item": [
+    {
+      "name": "Đăng nhập",
+      "item": [
+        {
+          "name": "reader đăng nhập",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test.reader@example.com\",\n  \"password\": \"{{password}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('readerToken', pm.response.json().token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "librarian đăng nhập",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test.librarian@example.com\",\n  \"password\": \"{{password}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('librarianToken', pm.response.json().token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "admin đăng nhập",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test.admin@example.com\",\n  \"password\": \"{{password}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('adminToken', pm.response.json().token);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Phân quyền",
+      "item": [
+        {
+          "name": "không token → 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reports/books?from=2020-01-01&to=2020-03-31",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2020-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2020-03-31"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "edge 8: reader books → 403",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{readerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/books?from=2020-01-01&to=2020-03-31",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2020-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2020-03-31"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "edge 8: reader borrows → 403",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{readerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/borrows?from=2020-01-01&to=2020-03-31",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "borrows"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2020-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2020-03-31"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "edge 8: reader fines → 403",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{readerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/fines?from=2020-01-01&to=2020-03-31",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "fines"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2020-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2020-03-31"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "edge 8: reader damaged-lost → 403",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{readerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/damaged-lost?from=2020-01-01&to=2020-03-31",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "damaged-lost"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2020-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2020-03-31"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "edge 8: reader xuất CSV → 403",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{readerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/fines/csv?from=2020-01-01&to=2020-03-31",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "fines",
+                "csv"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2020-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2020-03-31"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "loại báo cáo không tồn tại → 404",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/users?from=2020-01-01&to=2020-03-31",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2020-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2020-03-31"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Khoảng thời gian",
+      "item": [
+        {
+          "name": "edge 1: từ ngày lớn hơn đến ngày → 400",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/borrows?from=2020-03-01&to=2020-01-01",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "borrows"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2020-03-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2020-01-01"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('lỗi ở to', () => pm.expect(pm.response.json().errors.to).to.eql('Từ ngày phải nhỏ hơn hoặc bằng đến ngày'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "edge 2: quá 366 ngày → 400",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/books?from=2019-01-01&to=2020-01-02",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2019-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2020-01-02"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('giới hạn 366 ngày', () => pm.expect(pm.response.json().errors.to).to.eql('Khoảng thời gian tối đa 366 ngày'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ngày không tồn tại → 400",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/books?from=2020-02-30&to=2020-03-01",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2020-02-30"
+                },
+                {
+                  "key": "to",
+                  "value": "2020-03-01"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('lỗi ở from', () => pm.expect(pm.response.json().errors.from).to.eql('Từ ngày không hợp lệ'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "không truyền khoảng → tháng hiện tại (giờ Việt Nam)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/borrows",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "borrows"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const today = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);",
+                  "pm.test('from là ngày 1 của tháng', () => pm.expect(pm.response.json().from).to.eql(today.slice(0, 8) + '01'));",
+                  "pm.test('gom theo ngày', () => pm.expect(pm.response.json().groupBy).to.eql('day'));",
+                  "pm.test('không cache', () => pm.expect(pm.response.headers.get('Cache-Control')).to.eql('no-store'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "edge 1: CSV với khoảng sai → 400",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/borrows/csv?from=2020-03-01&to=2020-01-01",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "borrows",
+                "csv"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2020-03-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2020-01-01"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Librarian",
+      "item": [
+        {
+          "name": "Báo cáo Sách quý 1/2020",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/books?from=2020-01-01&to=2020-03-31",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2020-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2020-03-31"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('lượt mượn, mất, hư trong kỳ', () => pm.expect([body.summary.borrowsInRange, body.summary.lostInRange, body.summary.damagedInRange]).to.eql([7, 1, 1]));",
+                  "pm.test('sắp theo lượt mượn trong kỳ, bằng nhau theo tên', () => pm.expect(body.rows.slice(0, 3).map((r) => [r.title, r.borrowsInRange])).to.eql([['Test Sách BC 01 Mượn Nhiều', 3], ['Test Sách BC 02 Mất Hư', 2], ['Test Sách BC 03 \"Nháy\", Phẩy', 2]]));",
+                  "pm.test('tồn kho hiện tại của BC 02', () => pm.expect(body.rows[1]).to.include({ totalQuantity: 3, available: 2, damaged: 1, lostInRange: 1, damagedInRange: 1 }));",
+                  "pm.test('biểu đồ top sách', () => pm.expect(body.chart.map((c) => c.borrows)).to.eql([3, 2, 2]));",
+                  "pm.test('10 dòng mỗi trang, có dữ liệu', () => { pm.expect(body.pagination.pageSize).to.eql(10); pm.expect(body.rows.length).to.be.at.most(10); pm.expect(body.hasData).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Báo cáo Sách: trang quá lớn → trang cuối",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/books?from=2020-01-01&to=2020-03-31&page=9999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2020-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2020-03-31"
+                },
+                {
+                  "key": "page",
+                  "value": "9999"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('trang cuối', () => { const p = pm.response.json().pagination; pm.expect(p.page).to.eql(p.totalPages); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Báo cáo Mượn trả theo tháng",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/borrows?from=2020-01-01&to=2020-03-31",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "borrows"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2020-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2020-03-31"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('mặc định theo tháng (khoảng > 31 ngày)', () => pm.expect(body.groupBy).to.eql('month'));",
+                  "pm.test('mượn 3/2/2, trả 2/2/3', () => pm.expect(body.rows).to.eql([{ period: '2020-01-01', borrowed: 3, returned: 2 }, { period: '2020-02-01', borrowed: 2, returned: 2 }, { period: '2020-03-01', borrowed: 2, returned: 3 }]));",
+                  "pm.test('tổng 7/7', () => pm.expect(body.summary).to.eql({ borrowed: 7, returned: 7 }));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Báo cáo Mượn trả theo quý",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/borrows?from=2020-01-01&to=2020-03-31&groupBy=quarter",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "borrows"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2020-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2020-03-31"
+                },
+                {
+                  "key": "groupBy",
+                  "value": "quarter"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('một quý', () => pm.expect(pm.response.json().rows).to.eql([{ period: '2020-01-01', borrowed: 7, returned: 7 }]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Báo cáo Mượn trả theo ngày: ranh giới múi giờ",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/borrows?from=2020-01-01&to=2020-03-31&groupBy=day",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "borrows"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2020-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2020-03-31"
+                },
+                {
+                  "key": "groupBy",
+                  "value": "day"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const rows = pm.response.json().rows;",
+                  "pm.test('đủ 91 ngày, ngày trống là 0', () => pm.expect(rows.length).to.eql(91));",
+                  "pm.test('00:30 ngày 01/01/2020 giờ VN được tính, 23:30 ngày 31/12/2019 thì không', () => pm.expect(rows[0]).to.eql({ period: '2020-01-01', borrowed: 1, returned: 0 }));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "groupBy lạ → mặc định",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/borrows?from=2020-01-01&to=2020-03-31&groupBy=week",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "borrows"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2020-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2020-03-31"
+                },
+                {
+                  "key": "groupBy",
+                  "value": "week"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('theo tháng', () => pm.expect(pm.response.json().groupBy).to.eql('month'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "edge 7: librarian xem báo cáo Phạt",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/fines?from=2020-01-01&to=2020-03-31",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "fines"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2020-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2020-03-31"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('phát sinh, đã thu, chưa thu', () => pm.expect(body.summary).to.eql({ issuedCount: 3, issuedAmount: 90060000, collectedCount: 2, collectedAmount: 60000, outstandingCount: 1, outstandingAmount: 90000000 }));",
+                  "pm.test('theo loại', () => pm.expect(body.byType.map((t) => [t.type, t.collectedAmount, t.outstandingAmount])).to.eql([['late', 10000, 0], ['damaged', 50000, 0], ['lost', 0, 90000000]]));",
+                  "pm.test('test.report nợ nhiều nhất', () => pm.expect(body.debtors[0]).to.include({ email: 'test.report@example.com', unpaidCount: 1, unpaidAmount: 90000000 }));",
+                  "pm.test('độc giả quá hạn cũng có trong danh sách nợ', () => pm.expect(body.pagination.total).to.be.at.least(2));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Báo cáo Sách mất / hư",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/damaged-lost?from=2020-01-01&to=2020-03-31",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "damaged-lost"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2020-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2020-03-31"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('1 mất, 1 hư', () => pm.expect(body.summary).to.eql({ lost: 1, damaged: 1, copies: 2 }));",
+                  "pm.test('gom theo sách và loại, mới nhất trước', () => pm.expect(body.rows.map((r) => [r.title, r.isbn, r.condition, r.copies, r.lastRecordedAt])).to.eql([['Test Sách BC 02 Mất Hư', '9780262033848', 'lost', 1, '2020-03-01'], ['Test Sách BC 02 Mất Hư', '9780262033848', 'damaged', 1, '2020-02-01']]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Không có dữ liệu trong khoảng (Mượn trả)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/borrows?from=2019-01-01&to=2019-01-31",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "borrows"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2019-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2019-01-31"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('hasData false, vẫn đủ 31 ngày bằng 0', () => { const b = pm.response.json(); pm.expect(b.hasData).to.eql(false); pm.expect(b.rows.length).to.eql(31); pm.expect(b.summary).to.eql({ borrowed: 0, returned: 0 }); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Không có dữ liệu trong khoảng (Sách mất / hư)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/damaged-lost?from=2019-01-01&to=2019-01-31",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "damaged-lost"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2019-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2019-01-31"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('hasData false', () => { const b = pm.response.json(); pm.expect(b.hasData).to.eql(false); pm.expect(b.rows).to.eql([]); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "edge 3, 6: xuất CSV Mượn trả",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/borrows/csv?from=2020-01-01&to=2020-03-31",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "borrows",
+                "csv"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2020-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2020-03-31"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('text/csv utf-8', () => pm.expect(pm.response.headers.get('Content-Type')).to.eql('text/csv; charset=utf-8'));",
+                  "pm.test('tên file theo khoảng', () => pm.expect(pm.response.headers.get('Content-Disposition')).to.include('bao-cao-muon-tra_2020-01-01_2020-03-31.csv'));",
+                  "const text = pm.response.text();",
+                  "pm.test('3 byte đầu là BOM UTF-8 (text() của Postman tự bỏ BOM)', () => pm.expect(Array.from(pm.response.stream.slice(0, 3))).to.eql([0xEF, 0xBB, 0xBF]));",
+                  "pm.test('đúng bộ lọc đang xem', () => { pm.expect(text).to.include('Từ ngày,01/01/2020\\r\\nĐến ngày,31/03/2020'); pm.expect(text).to.include('01/2020,3,2\\r\\n02/2020,2,2\\r\\n03/2020,2,3\\r\\nTổng,7,7'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "edge 4, 5: xuất CSV Sách (escape, chống công thức)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{librarianToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/books/csv?from=2020-01-01&to=2020-03-31",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "books",
+                "csv"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2020-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2020-03-31"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const text = pm.response.text();",
+                  "pm.test('tên có nháy và phẩy được bao nháy kép; tác giả bắt đầu bằng = có dấu nháy đơn', () => pm.expect(text).to.include('\"Test Sách BC 03 \"\"Nháy\"\", Phẩy\",\\'=1+1 Tác Giả BC,,Test Báo Cáo,2,2,0,0,2,0,0'));",
+                  "pm.test('CSV lấy mọi dòng, không chỉ trang 1', () => pm.expect(text.split('\\r\\n').length).to.be.above(15));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "admin xem báo cáo Sách",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/books?from=2020-01-01&to=2020-03-31",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2020-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2020-03-31"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "admin xuất CSV Phạt",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/fines/csv?from=2020-01-01&to=2020-03-31",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "fines",
+                "csv"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2020-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2020-03-31"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const text = pm.response.text();",
+                  "pm.test('dòng tổng', () => pm.expect(text).to.include('Tổng,3,90060000,2,60000,1,90000000'));",
+                  "pm.test('độc giả nợ', () => pm.expect(text).to.include('Test Báo Cáo Nợ Phạt,test.report@example.com,1,90000000,0,0'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "admin xuất CSV Sách mất / hư",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/damaged-lost/csv?from=2020-01-01&to=2020-03-31",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "damaged-lost",
+                "csv"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2020-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2020-03-31"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('2 dòng', () => pm.expect(pm.response.text()).to.include('Test Sách BC 02 Mất Hư,Tác Giả BC,9780262033848,Test Báo Cáo,Mất,1,01/03/2020'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

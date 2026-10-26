@@ -66,6 +66,8 @@ const USERS = [
   { email: 'test.ur.e2e.disabled@example.com', name: 'Test Vai Trò E2E Khóa', role: 'reader', status: 'disabled' },
   // 2.7.1: độc giả quá hạn lâu nhất (xem seedDashboard), đứng đầu danh sách nợ quá hạn.
   { email: 'test.dashboard@example.com', name: 'Test Dashboard Quá Hạn', role: 'reader', status: 'active' },
+  // 2.7.2: đơn mượn và phiếu phạt quý 1/2020 cho báo cáo chi tiết (xem seedReport).
+  { email: 'test.report@example.com', name: 'Test Báo Cáo Nợ Phạt', role: 'reader', status: 'active' },
 ];
 
 async function main() {
@@ -98,6 +100,7 @@ async function main() {
   await seedUserList(prisma);
   await seedRoleChange(prisma);
   await seedDashboard(prisma);
+  await seedReport(prisma);
   await prisma.$disconnect();
 }
 
@@ -885,6 +888,82 @@ async function seedDashboard(prisma) {
   }
   await prisma.borrowOrder.create({ data: { readerId: reader.id, bookId: today.id, status: 'pending' } });
   console.log('book      4 sách Test Sách DB 0x cho 2.7.1');
+}
+
+// 2.7.2: dữ liệu nằm trong quý 1/2020, trước mọi dữ liệu khác của hệ thống, nên báo cáo lọc 01/01/2020 –
+// 31/03/2020 cho số liệu chính xác. Theo tháng: mượn 3/2/2, trả 2/2/3 (tổng 7/7). Đơn mượn lúc 00:30 ngày
+// 01/01/2020 giờ Việt Nam được tính, đơn trả lúc 23:30 ngày 31/12/2019 thì không (ranh giới múi giờ).
+// Phạt: phát sinh 3 phiếu 90.060.000 đ, đã thu 60.000 đ, chưa thu 90.000.000 đ (phiếu Mất của test.report,
+// nên test.report đứng đầu danh sách nợ). Sách mất/hư: BC 02 mất 1 bản (01/03), hư 1 bản (01/02).
+// Sách BC 03 có tên chứa nháy kép + dấu phẩy và tác giả bắt đầu bằng "=" (CSV edge 4, 5).
+const CATEGORY_REPORT = 'Test Báo Cáo';
+
+async function seedReport(prisma) {
+  const librarian = await prisma.user.findUnique({ where: { email: 'test.librarian@example.com' }, select: { id: true } });
+  const reader = await prisma.user.findUnique({ where: { email: 'test.report@example.com' }, select: { id: true } });
+  const category = await prisma.category.findFirst({ where: { name: CATEGORY_REPORT, deletedAt: null } })
+    ?? await prisma.category.create({ data: { name: CATEGORY_REPORT } });
+  const book = (title, data) => prisma.book.create({
+    data: {
+      title, author: 'Tác Giả BC', publishYear: 2019, description: 'Dữ liệu test 2.7.2', categoryId: category.id, ...data,
+    },
+  });
+  const many = await book('Test Sách BC 01 Mượn Nhiều', { totalQuantity: 5, availableQuantity: 5, borrowCount: 3 });
+  // Ban đầu 4 bản: 1 bản mất (tổng −1), 1 bản hư (vào damaged, không về kho).
+  const broken = await book('Test Sách BC 02 Mất Hư', {
+    isbn: '9780262033848', totalQuantity: 3, availableQuantity: 2, damagedQuantity: 1, borrowCount: 2,
+  });
+  const quoted = await book('Test Sách BC 03 "Nháy", Phẩy', {
+    author: '=1+1 Tác Giả BC', totalQuantity: 2, availableQuantity: 2, borrowCount: 3,
+  });
+  const tiers = {};
+  for (const [name, type, amount] of [
+    ['Test BC Trả Muộn', 'late', 10000], ['Test BC Hư Hỏng', 'damaged', 50000], ['Test BC Mất', 'lost', 90000000],
+  ]) {
+    tiers[type] = await prisma.fineTier.create({ data: { name, type, amount } });
+  }
+  // Giờ UTC; 05:00Z là 12:00 ở Việt Nam.
+  const noon = (date) => new Date(`${date}T05:00:00Z`);
+  const HOUR = 3600 * 1000;
+  // [sách, mượn lúc, trả lúc, tình trạng, số ngày được mượn, phiếu phạt]
+  const ORDERS = [
+    [many, noon('2020-01-10'), noon('2020-01-17'), 'normal', 14],
+    [many, noon('2020-02-05'), noon('2020-02-12'), 'normal', 14],
+    [many, noon('2020-03-15'), noon('2020-03-22'), 'normal', 4, { type: 'late', status: 'paid', submittedAt: noon('2020-03-24'), confirmedAt: noon('2020-03-25') }],
+    [broken, noon('2020-01-20'), noon('2020-02-01'), 'damaged', 14, { type: 'damaged', status: 'paid', submittedAt: noon('2020-02-02'), confirmedAt: noon('2020-02-03') }],
+    [broken, noon('2020-02-20'), noon('2020-03-01'), 'lost', 14, { type: 'lost', status: 'unpaid' }],
+    [quoted, noon('2019-12-20'), new Date('2019-12-31T16:30:00Z'), 'normal', 14],
+    [quoted, new Date('2019-12-31T17:30:00Z'), noon('2020-01-05'), 'normal', 14],
+    [quoted, noon('2020-03-05'), noon('2020-03-10'), 'normal', 14],
+  ];
+  for (const [target, borrowedAt, returnedAt, condition, days, fine] of ORDERS) {
+    const dueDate = new Date(Date.parse(borrowedAt.toISOString().slice(0, 10)) + days * DAY);
+    const lateDays = Math.max(0, Math.round((Date.parse(returnedAt.toISOString().slice(0, 10)) - dueDate.getTime()) / DAY));
+    const order = await prisma.borrowOrder.create({
+      data: {
+        readerId: reader.id, bookId: target.id, status: 'returned', requestedDays: days, processedById: librarian.id,
+        createdAt: new Date(borrowedAt.getTime() - HOUR), processedAt: borrowedAt, borrowedAt, dueDate, returnedAt,
+      },
+    });
+    const returnRequest = await prisma.returnRequest.create({
+      data: {
+        borrowOrderId: order.id, status: 'confirmed', requestedById: reader.id, processedById: librarian.id,
+        processedAt: returnedAt, createdAt: new Date(returnedAt.getTime() - HOUR), condition, lateDays,
+        conditionNote: condition === 'normal' ? null : 'Dữ liệu test 2.7.2',
+      },
+    });
+    if (!fine) continue;
+    const { type, ...status } = fine;
+    const tier = tiers[type];
+    await prisma.fineTicket.create({
+      data: {
+        readerId: reader.id, borrowOrderId: order.id, returnRequestId: returnRequest.id, fineTierId: tier.id, type,
+        tierName: tier.name, amount: tier.amount, issuedById: librarian.id, issuedAt: returnedAt,
+        ...status, ...(status.confirmedAt && { confirmedById: librarian.id }),
+      },
+    });
+  }
+  console.log(`book      3 sách Test Sách BC 0x (id ${many.id}, ${broken.id}, ${quoted.id}) cho 2.7.2`);
 }
 
 main().catch((err) => {
